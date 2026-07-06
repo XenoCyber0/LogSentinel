@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String
+  name          String?
+  role          Role      @default(ANALYST)
+  isVerified    Boolean   @default(false)
+  isBanned      Boolean   @default(false)
+  lastLoginAt   DateTime?
+  lastLoginIp   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      LogSession[]
+  alerts        Alert[]
+  auditLogs     AuditLog[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  userAgent String?
+  ipAddress String?
+}
+
+model LogSession {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  rawLog      String     @db.Text
+  logFormat   LogFormat  @default(UNKNOWN)
+  fileSize    Int?
+  analysis    Json?
+  severity    Severity   @default(UNKNOWN)
+  tags        String[]
+  isArchived  Boolean    @default(false)
+  analyzedAt  DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  alerts    Alert[]
+  ipRecords IPRecord[]
+}
+
+model Alert {
+  id          String     @id @default(cuid())
+  sessionId   String
+  session     LogSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        AlertType
+  severity    Severity
+  title       String
+  description String
+  rawLine     String?
+  ipAddress   String?
+  isRead      Boolean    @default(false)
+  isDismissed Boolean    @default(false)
+  metadata    Json?
+  createdAt   DateTime   @default(now())
+}
+
+model IPRecord {
+  id           String     @id @default(cuid())
+  sessionId    String
+  session      LogSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ipAddress    String
+  requestCount Int        @default(1)
+  threatScore  Int        @default(0)
+  country      String?
+  isTorExit    Boolean    @default(false)
+  isKnownBad   Boolean    @default(false)
+  firstSeen    DateTime
+  lastSeen     DateTime
+  endpoints    String[]
+  statusCodes  Json?
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  resource   String
+  resourceId String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}
+
+enum Role {
+  ANALYST
+  ADMIN
+  VIEWER
+}
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+  UNKNOWN
+}
+
+enum LogFormat {
+  NGINX
+  AUTH
+  SYSLOG
+  DOCKER
+  APP
+  UNKNOWN
+}
+
+enum AlertType {
+  BRUTE_FORCE
+  SUSPICIOUS_IP
+  SQL_INJECTION
+  PATH_TRAVERSAL
+  PRIVILEGE_ESCALATION
+  ANOMALY
+  RATE_LIMIT
+  UNKNOWN
+}

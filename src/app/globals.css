@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+body {
+  font-feature-settings: "rlig" 1, "kern" 1;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #18181b;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* Log viewer styles */
+.log-viewer {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* Severity badges */
+.severity-critical {
+  @apply bg-red-950 text-red-400 border-red-900;
+}
+
+.severity-high {
+  @apply bg-orange-950 text-orange-400 border-orange-900;
+}
+
+.severity-medium {
+  @apply bg-yellow-950 text-yellow-400 border-yellow-900;
+}
+
+.severity-low {
+  @apply bg-blue-950 text-blue-400 border-blue-900;
+}
+
+.severity-info {
+  @apply bg-zinc-800 text-zinc-400 border-zinc-700;
+}
+
+/* Analysis report */
+.threat-card {
+  @apply border-l-4 border-l-red-500 bg-zinc-900/50;
+}
+
+/* Recharts customization */
+.recharts-wrapper text {
+  fill: #71717a;
+}
+
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  stroke: #3f3f46;
+}
+
+/* Loading states */
+.loading-skeleton {
+  @apply animate-pulse bg-zinc-800 rounded;
+}
+
+/* Responsive table */
+@media (max-width: 768px) {
+  .table-responsive {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
+/* Cookie banner */
+.cookie-banner {
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
