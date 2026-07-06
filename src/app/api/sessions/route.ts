@@ -8,6 +8,14 @@ import { checkRateLimit } from '@/lib/security/rateLimiter';
 const createSessionSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(500).optional(),
+  // Body-size cap: Next.js 16's `experimental.serverActions.bodySizeLimit` (see
+  // next.config.ts) only applies to Server Actions, NOT to App Router API route
+  // handlers like this one. There is no Next-level cap on /api/*/route.ts.
+  // This 5MB Zod .max() is therefore the ONLY enforced limit on request bodies
+  // for this endpoint. Do not remove or raise it without adding an explicit
+  // reverse-proxy / runtime body-size guard (e.g. upstream nginx, Vercel
+  // function payload limit, or a custom Request body reader check) first,
+  // or the API will accept arbitrarily large payloads.
   rawLog: z.string().min(10).max(5 * 1024 * 1024),
   tags: z.array(z.string()).optional(),
 });
