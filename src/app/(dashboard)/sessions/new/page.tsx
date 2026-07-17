@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
-import { Upload, FileText } from 'lucide-react';
+import { Upload } from 'lucide-react';
 
 const sessionSchema = z.object({
   title: z.string().min(3, 'Title must be at least 3 characters'),

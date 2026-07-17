@@ -1,6 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
-import { signAccessToken, verifyAccessToken, generateRefreshToken, hashRefreshToken } from './jwt';
-import { JWTPayload } from './jwt';
+import { signAccessToken, generateRefreshToken, hashRefreshToken } from './jwt';
 import bcrypt from 'bcryptjs';
 import { logger } from '@/lib/logger/winston';
 

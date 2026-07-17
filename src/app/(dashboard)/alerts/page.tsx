@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
 import { apiClient } from '@/lib/api/client';
-import { AlertTriangle, CheckCircle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 export default function AlertsPage() {
   const { accessToken } = useAuthStore();

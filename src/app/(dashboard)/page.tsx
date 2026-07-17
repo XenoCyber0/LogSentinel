@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, FileText, TrendingUp, Users } from 'lucide-react';
+import { AlertTriangle, FileText, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/stores/authStore';

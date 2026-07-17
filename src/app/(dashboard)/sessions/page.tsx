@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Plus, Calendar, AlertTriangle, FileText } from 'lucide-react';
+import { Plus, Calendar, FileText } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/utils';

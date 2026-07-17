@@ -4,7 +4,6 @@ import crypto from 'crypto';
 
 const ALGORITHM = 'RS256';
 const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '30d';
 
 export interface JWTPayload {
   userId: string;
