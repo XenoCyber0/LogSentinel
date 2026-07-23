@@ -26,21 +26,3 @@ export const logger = winston.createLogger({
   ],
   exitOnError: false,
 });
-
-// Mask sensitive data in logs
-export function maskSensitive(obj: any): any {
-  if (typeof obj !== 'object' || obj === null) return obj;
-  
-  const sensitive = ['password', 'token', 'secret', 'key', 'authorization'];
-  const masked = { ...obj };
-  
-  for (const key of Object.keys(masked)) {
-    if (sensitive.some(s => key.toLowerCase().includes(s))) {
-      masked[key] = '***REDACTED***';
-    } else if (typeof masked[key] === 'object') {
-      masked[key] = maskSensitive(masked[key]);
-    }
-  }
-  
-  return masked;
-}

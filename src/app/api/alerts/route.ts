@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     });
 
     return NextResponse.json({ data: { alerts }, error: null, status: 200 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ data: null, error: 'Failed to fetch alerts', status: 500 }, { status: 500 });
   }
 }

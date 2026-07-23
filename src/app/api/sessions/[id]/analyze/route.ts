@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { Prisma, Severity, LogFormat } from '@prisma/client';
 import { verifyAccessToken } from '@/lib/auth/jwt';
 import { analyzeLog } from '@/lib/ai/analyzer';
 import { logger } from '@/lib/logger/winston';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
 import { getClientIp } from '@/lib/security/getClientIp';
+import { getErrorMessage } from '@/lib/utils/errors';
 import { z } from 'zod';
 
 const analyzeSchema = z.object({
@@ -58,9 +60,9 @@ export async function POST(
     await prisma.logSession.update({
       where: { id },
       data: {
-        analysis: analysis as any,
-        severity: analysis.severity as any,
-        logFormat: analysis.logFormat as any,
+        analysis: analysis as unknown as Prisma.InputJsonValue,
+        severity: analysis.severity as Severity,
+        logFormat: analysis.logFormat as LogFormat,
         analyzedAt: new Date(),
       },
     });
@@ -74,7 +76,7 @@ export async function POST(
         sessionId: id,
         userId: payload.userId,
         type: 'ANOMALY' as const,
-        severity: threat.severity as any,
+        severity: threat.severity as Severity,
         title: threat.title,
         description: threat.description,
         metadata: { evidence: threat.evidence, recommendation: threat.recommendation },
@@ -95,7 +97,7 @@ export async function POST(
         threatScore: ipData.threatScore,
         isTorExit: ipData.isTorExit,
         endpoints: ipData.endpoints,
-        statusCodes: ipData.statusCodes as any,
+        statusCodes: ipData.statusCodes as Prisma.InputJsonValue,
         firstSeen: new Date(),
         lastSeen: new Date(),
       }));
@@ -116,8 +118,8 @@ export async function POST(
     logger.info('AI analysis completed', { sessionId: id, severity: analysis.severity });
 
     return NextResponse.json({ data: { analysis }, error: null, status: 200 });
-  } catch (error: any) {
-    logger.error('Analysis failed', { error: error.message });
+  } catch (error: unknown) {
+    logger.error('Analysis failed', { error: getErrorMessage(error) });
     return NextResponse.json({ data: null, error: 'Analysis failed', status: 500 }, { status: 500 });
   }
 }

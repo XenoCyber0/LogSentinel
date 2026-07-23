@@ -5,7 +5,6 @@ export const env = createEnv({
   server: {
     DATABASE_URL: z.string().url(),
     DIRECT_URL: z.string().url().optional(),
-    NEXTAUTH_SECRET: z.string().min(32),
     JWT_PRIVATE_KEY: z.string(),
     JWT_PUBLIC_KEY: z.string(),
     ANTHROPIC_API_KEY: z.string().startsWith("sk-ant-"),
@@ -25,7 +24,6 @@ export const env = createEnv({
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
     DIRECT_URL: process.env.DIRECT_URL,
-    NEXTAUTH_SECRET: process.env.NEXTAUTH_SECRET,
     JWT_PRIVATE_KEY: process.env.JWT_PRIVATE_KEY,
     JWT_PUBLIC_KEY: process.env.JWT_PUBLIC_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,

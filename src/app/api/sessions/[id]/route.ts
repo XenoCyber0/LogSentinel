@@ -74,7 +74,7 @@ export async function PATCH(
     }
 
     return NextResponse.json({ data: { success: true }, error: null, status: 200 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ data: null, error: 'Update failed', status: 500 }, { status: 500 });
   }
 }
@@ -98,7 +98,7 @@ export async function DELETE(
     });
 
     return NextResponse.json({ data: { success: true }, error: null, status: 200 });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ data: null, error: 'Delete failed', status: 500 }, { status: 500 });
   }
 }

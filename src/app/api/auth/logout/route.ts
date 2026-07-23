@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { logger } from '@/lib/logger/winston';
 import { createHash } from 'crypto';
 import { getClientIp } from '@/lib/security/getClientIp';
+import { getErrorMessage } from '@/lib/utils/errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -48,8 +49,8 @@ export async function POST(request: NextRequest) {
     response.cookies.delete('refreshToken');
 
     return response;
-  } catch (error: any) {
-    logger.error('Logout failed', { error: error.message });
+  } catch (error: unknown) {
+    logger.error('Logout failed', { error: getErrorMessage(error) });
     return NextResponse.json(
       { data: null, error: 'Logout failed', status: 500 },
       { status: 500 }

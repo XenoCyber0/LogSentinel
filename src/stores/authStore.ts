@@ -14,7 +14,6 @@ interface AuthState {
   setAuth: (user: User, accessToken: string) => void;
   setAccessToken: (accessToken: string) => void;
   logout: () => void;
-  updateUser: (updates: Partial<User>) => void;
   hydrate: () => Promise<void>;
 }
 
@@ -28,10 +27,6 @@ export const useAuthStore = create<AuthState>()(
         set({ user, accessToken, isAuthenticated: true }),
       setAccessToken: (accessToken) => set({ accessToken }),
       logout: () => set({ user: null, accessToken: null, isAuthenticated: false }),
-      updateUser: (updates) =>
-        set((state) => ({
-          user: state.user ? { ...state.user, ...updates } : null,
-        })),
       // Called on app mount: if we previously persisted an authenticated
       // user but the accessToken is in memory only, ask the server to
       // mint a new one using the httpOnly refresh cookie. If the refresh

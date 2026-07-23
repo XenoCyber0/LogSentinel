@@ -8,10 +8,35 @@ import Link from 'next/link';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/stores/authStore';
 
+interface SessionListItem {
+  id: string;
+  title: string;
+  severity: string;
+  analyzedAt: string | null;
+  createdAt: string;
+}
+
+interface AlertItem {
+  id: string;
+  title: string;
+  description: string;
+  severity: string;
+  isRead: boolean;
+}
+
+interface SessionsResponse {
+  sessions: SessionListItem[];
+  pagination?: { total: number };
+}
+
+interface AlertsResponse {
+  alerts: AlertItem[];
+}
+
 export default function DashboardHome() {
   const { accessToken } = useAuthStore();
 
-  const { data: sessionsData } = useQuery({
+  const { data: sessionsData } = useQuery<SessionsResponse>({
     queryKey: ['sessions'],
     queryFn: async () => {
       const res = await apiClient.get('/sessions');
@@ -20,7 +45,7 @@ export default function DashboardHome() {
     enabled: !!accessToken,
   });
 
-  const { data: alertsData } = useQuery({
+  const { data: alertsData } = useQuery<AlertsResponse>({
     queryKey: ['alerts'],
     queryFn: async () => {
       const res = await apiClient.get('/alerts');
@@ -38,14 +63,14 @@ export default function DashboardHome() {
     },
     {
       title: 'Active Alerts',
-      value: alertsData?.alerts?.filter((a: any) => !a.isRead).length || 0,
+      value: alertsData?.alerts?.filter((a) => !a.isRead).length || 0,
       icon: AlertTriangle,
       change: '-4%',
     },
     {
       title: 'Analyzed Today',
-      value: sessionsData?.sessions?.filter((s: any) => 
-        new Date(s.analyzedAt).toDateString() === new Date().toDateString()
+      value: sessionsData?.sessions?.filter((s) =>
+        s.analyzedAt && new Date(s.analyzedAt).toDateString() === new Date().toDateString()
       ).length || 0,
       icon: TrendingUp,
       change: '+28%',
@@ -90,7 +115,7 @@ export default function DashboardHome() {
             <CardTitle>Recent Sessions</CardTitle>
           </CardHeader>
           <CardContent>
-            {sessionsData?.sessions?.slice(0, 5).map((session: any) => (
+            {sessionsData?.sessions?.slice(0, 5).map((session) => (
               <Link 
                 key={session.id} 
                 href={`/dashboard/sessions/${session.id}`}
@@ -116,7 +141,7 @@ export default function DashboardHome() {
             <CardTitle>Critical Alerts</CardTitle>
           </CardHeader>
           <CardContent>
-            {alertsData?.alerts?.filter((a: any) => a.severity === 'CRITICAL').slice(0, 4).map((alert: any, idx: number) => (
+            {alertsData?.alerts?.filter((a) => a.severity === 'CRITICAL').slice(0, 4).map((alert, idx) => (
               <div key={idx} className="flex items-start gap-3 p-3 rounded-lg border-l-4 border-red-500 bg-zinc-950 mb-2">
                 <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
                 <div>

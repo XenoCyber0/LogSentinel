@@ -10,19 +10,3 @@ export interface User {
   createdAt: string;
   updatedAt: string;
 }
-
-export interface Session {
-  user: User;
-  accessToken: string;
-  expiresAt: string;
-}
-
-export interface AuthResponse {
-  data: {
-    user: User;
-    accessToken?: string;
-    refreshToken?: string;
-  } | null;
-  error: string | null;
-  status: number;
-}

@@ -119,9 +119,9 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
     });
 
     return analysis;
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Claude analysis failed', {
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       logLength: sanitized.length,
     });
     
@@ -137,28 +137,5 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
       timeline: [],
       recommendations: ['Unable to complete automated analysis. Please review logs manually.'],
     };
-  }
-}
-
-export async function* streamAnalysis(logContent: string) {
-  const sanitized = sanitizeLogInput(logContent);
-
-  const stream = await anthropic.messages.create({
-    model: 'claude-3-5-sonnet-20241022',
-    max_tokens: 4096,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: `Analyze this log data:\n\n${sanitized.substring(0, 120000)}`,
-      },
-    ],
-    stream: true,
-  });
-
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      yield event.delta.text;
-    }
   }
 }

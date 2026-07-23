@@ -55,21 +55,17 @@ export async function checkRateLimit(
       remaining: result.remainingPoints,
       resetTime: result.msBeforeNext,
     };
-  } catch (error: any) {
-    if (error.remainingPoints !== undefined) {
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'remainingPoints' in error) {
+      const rateError = error as { remainingPoints: number; msBeforeNext: number };
       return {
         allowed: false,
-        remaining: error.remainingPoints,
-        resetTime: error.msBeforeNext,
+        remaining: rateError.remainingPoints,
+        resetTime: rateError.msBeforeNext,
       };
     }
     
-    logger.error('Rate limiter error', { error: error.message });
+    logger.error('Rate limiter error', { error: String(error) });
     return { allowed: true, remaining: 0, resetTime: 0 };
   }
-}
-
-export async function resetRateLimit(identifier: string, type: 'ip' | 'user' = 'ip') {
-  const limiter = type === 'user' ? userLimiter : ipLimiter;
-  await limiter.delete(identifier);
 }

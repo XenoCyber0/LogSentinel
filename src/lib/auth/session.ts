@@ -157,20 +157,3 @@ export async function refreshAccessToken(refreshToken: string) {
     user: record.user,
   };
 }
-
-export async function revokeSession(refreshTokenId: string, userId: string) {
-  await prisma.refreshToken.updateMany({
-    where: {
-      id: refreshTokenId,
-      userId,
-    },
-    data: { revokedAt: new Date() },
-  });
-}
-
-export async function revokeAllSessions(userId: string) {
-  await prisma.refreshToken.updateMany({
-    where: { userId, revokedAt: null },
-    data: { revokedAt: new Date() },
-  });
-}

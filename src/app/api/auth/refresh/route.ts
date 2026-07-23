@@ -3,6 +3,7 @@ import { refreshAccessToken } from '@/lib/auth/session';
 import { logger } from '@/lib/logger/winston';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
 import { getClientIp } from '@/lib/security/getClientIp';
+import { getErrorMessage } from '@/lib/utils/errors';
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,8 +51,8 @@ export async function POST(request: NextRequest) {
     });
 
     return response;
-  } catch (error: any) {
-    logger.warn('Refresh token rejected', { error: error.message });
+  } catch (error: unknown) {
+    logger.warn('Refresh token rejected', { error: getErrorMessage(error) });
 
     // All refresh failures (invalid, expired, family-reuse trip) result in
     // clearing the cookie so the client falls back to login.

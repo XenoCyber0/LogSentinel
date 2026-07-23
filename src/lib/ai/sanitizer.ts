@@ -40,39 +40,3 @@ export function sanitizeLogInput(input: string): string {
 
   return sanitized.trim();
 }
-
-export function detectPII(logContent: string): string[] {
-  const piiPatterns = [
-    { name: 'Email', regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g },
-    { name: 'SSN', regex: /\b\d{3}-\d{2}-\d{4}\b/g },
-    { name: 'Credit Card', regex: /\b(?:\d{4}[- ]?){3}\d{4}\b/g },
-    { name: 'API Key', regex: /(?:sk-|pk_|AKIA)[a-zA-Z0-9]{20,}/gi },
-    { name: 'IP Address', regex: /\b(?:\d{1,3}\.){3}\d{1,3}\b/g },
-  ];
-
-  const detected: string[] = [];
-
-  piiPatterns.forEach(({ name, regex }) => {
-    if (regex.test(logContent)) {
-      detected.push(name);
-    }
-  });
-
-  return detected;
-}
-
-export function validateLogSize(content: string, isFile: boolean = false): { valid: boolean; error?: string } {
-  const MAX_PASTE = 5 * 1024 * 1024;
-  const MAX_FILE = 20 * 1024 * 1024;
-
-  const maxSize = isFile ? MAX_FILE : MAX_PASTE;
-
-  if (content.length > maxSize) {
-    return {
-      valid: false,
-      error: `Log exceeds maximum size of ${isFile ? '20MB' : '5MB'}`,
-    };
-  }
-
-  return { valid: true };
-}

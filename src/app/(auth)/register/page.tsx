@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -38,8 +38,12 @@ export default function RegisterPage() {
       await axios.post('/api/auth/register', data);
       toast.success('Account created! Please sign in.');
       router.push('/login');
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Registration failed');
+    } catch (error: unknown) {
+      const message =
+        error instanceof AxiosError
+          ? (error.response?.data?.error as string) || 'Registration failed'
+          : 'Registration failed';
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }

@@ -5,10 +5,21 @@ import { useAuthStore } from '@/stores/authStore';
 import { apiClient } from '@/lib/api/client';
 import { AlertTriangle } from 'lucide-react';
 
+interface AlertItem {
+  id: string;
+  title: string;
+  description: string;
+  severity: string;
+  isRead: boolean;
+  ipAddress?: string | null;
+  createdAt: string;
+  session?: { title: string } | null;
+}
+
 export default function AlertsPage() {
   const { accessToken } = useAuthStore();
 
-  const { data } = useQuery({
+  const { data } = useQuery<AlertItem[]>({
     queryKey: ['alerts-page'],
     queryFn: async () => {
       const res = await apiClient.get('/alerts');
@@ -25,7 +36,7 @@ export default function AlertsPage() {
       </div>
 
       <div className="space-y-3">
-        {data?.map((alert: any) => (
+        {data?.map((alert) => (
           <div key={alert.id} className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex gap-4">
             <div className="mt-1">
               <AlertTriangle className="text-red-400 h-5 w-5" />

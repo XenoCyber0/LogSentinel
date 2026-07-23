@@ -5,6 +5,7 @@ import { verifyAccessToken } from '@/lib/auth/jwt';
 import { logger } from '@/lib/logger/winston';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
 import { getClientIp } from '@/lib/security/getClientIp';
+import { getErrorMessage } from '@/lib/utils/errors';
 
 const createSessionSchema = z.object({
   title: z.string().min(1).max(200),
@@ -118,8 +119,8 @@ export async function POST(request: NextRequest) {
       error: null,
       status: 201,
     }, { status: 201 });
-  } catch (error: any) {
-    logger.error('Failed to create session', { error: error.message });
+  } catch (error: unknown) {
+    logger.error('Failed to create session', { error: getErrorMessage(error) });
     
     if (error instanceof z.ZodError) {
       return NextResponse.json({ data: null, error: 'Invalid input', status: 400 }, { status: 400 });

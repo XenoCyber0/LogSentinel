@@ -10,6 +10,7 @@ import { SeverityTimeline } from '@/components/sessions/SeverityTimeline';
 import { AlertTriangle, ArrowLeft, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { AxiosError } from 'axios';
 
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,8 +34,12 @@ export default function SessionDetailPage() {
       toast.success('Re-analysis complete');
       refetch();
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.error || 'Re-analysis failed');
+    onError: (error: unknown) => {
+      const message =
+        error instanceof AxiosError
+          ? (error.response?.data?.error as string) || 'Re-analysis failed'
+          : 'Re-analysis failed';
+      toast.error(message);
     },
   });
 

@@ -8,10 +8,21 @@ import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/stores/authStore';
 import { formatDate } from '@/lib/utils';
 
+interface SessionListItem {
+  id: string;
+  title: string;
+  description?: string | null;
+  severity: string;
+  analyzedAt: string | null;
+  createdAt: string;
+  tags?: string[];
+  _count?: { alerts: number; ipRecords: number };
+}
+
 export default function SessionsPage() {
   const { accessToken } = useAuthStore();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<{ sessions: SessionListItem[] }>({
     queryKey: ['sessions-list'],
     queryFn: async () => {
       const res = await apiClient.get('/sessions');
@@ -40,8 +51,8 @@ export default function SessionsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {data?.sessions?.length > 0 ? (
-            data.sessions.map((session: any) => (
+          {data?.sessions && data.sessions.length > 0 ? (
+            data.sessions.map((session) => (
               <Link 
                 key={session.id} 
                 href={`/dashboard/sessions/${session.id}`}
@@ -68,9 +79,9 @@ export default function SessionsPage() {
                   </div>
                   
                   <div className="text-right text-xs text-zinc-500">
-                    {session.tags?.length > 0 && (
+                    {session.tags && session.tags.length > 0 && (
                       <div className="flex gap-1 justify-end">
-                        {session.tags.slice(0, 2).map((tag: string, i: number) => (
+                        {session.tags.slice(0, 2).map((tag, i) => (
                           <span key={i} className="px-2 py-0.5 bg-zinc-800 rounded text-[10px]">{tag}</span>
                         ))}
                       </div>

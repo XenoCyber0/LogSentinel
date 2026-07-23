@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger/winston';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
 import { getClientIp } from '@/lib/security/getClientIp';
+import { getErrorMessage } from '@/lib/utils/errors';
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -72,8 +73,8 @@ export async function POST(request: NextRequest) {
       error: null,
       status: 201,
     }, { status: 201 });
-  } catch (error: any) {
-    logger.error('Registration failed', { error: error.message });
+  } catch (error: unknown) {
+    logger.error('Registration failed', { error: getErrorMessage(error) });
     
     if (error instanceof z.ZodError) {
       return NextResponse.json(

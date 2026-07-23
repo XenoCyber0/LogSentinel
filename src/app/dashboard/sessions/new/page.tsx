@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
 import { apiClient } from '@/lib/api/client';
+import { AxiosError } from 'axios';
 import { Upload } from 'lucide-react';
 
 const sessionSchema = z.object({
@@ -67,8 +68,12 @@ export default function NewSessionPage() {
       await apiClient.post(`/sessions/${sessionId}/analyze`, {});
 
       router.push(`/dashboard/sessions/${sessionId}`);
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to create session');
+    } catch (error: unknown) {
+      const message =
+        error instanceof AxiosError
+          ? (error.response?.data?.error as string) || 'Failed to create session'
+          : 'Failed to create session';
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }

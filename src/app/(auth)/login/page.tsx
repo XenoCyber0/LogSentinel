@@ -10,8 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/stores/authStore';
+import axios, { AxiosError } from 'axios';
 import { toast } from 'sonner';
-import axios from 'axios';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -43,8 +43,11 @@ export default function LoginPage() {
         toast.success('Logged in successfully');
         router.push('/dashboard');
       }
-    } catch (error: any) {
-      const message = error.response?.data?.error || 'Login failed';
+    } catch (error: unknown) {
+      const message =
+        error instanceof AxiosError
+          ? (error.response?.data?.error as string) || 'Login failed'
+          : 'Login failed';
       toast.error(message);
     } finally {
       setIsLoading(false);
