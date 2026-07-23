@@ -53,3 +53,6 @@ __pycache__/
 # Stray log files in repo root
 *-migrate.log
 pg-migrate.log
+
+# opencode local tooling config (keep API keys out of VCS)
+opencode.json
