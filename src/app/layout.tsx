@@ -17,6 +17,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'),
   title: 'AI Log Analyzer | Security SaaS',
   description: 'Enterprise-grade AI-powered log analysis for security analysts. Detect threats in real-time.',
   icons: {
