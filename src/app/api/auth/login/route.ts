@@ -4,6 +4,7 @@ import { verifyPassword, createUserSession } from '@/lib/auth/session';
 import { z } from 'zod';
 import { logger } from '@/lib/logger/winston';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { getClientIp } from '@/lib/security/getClientIp';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -12,7 +13,7 @@ const loginSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    const ip = getClientIp(request);
     const userAgent = request.headers.get('user-agent') || '';
 
     const rateCheck = await checkRateLimit(ip, 'auth');

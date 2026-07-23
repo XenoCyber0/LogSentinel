@@ -16,6 +16,24 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 export async function createUserSession(userId: string, userAgent?: string, ipAddress?: string) {
+  // Verify the user exists and is not banned BEFORE creating any refresh
+  // token records, so we don't leave orphaned tokens for banned/missing users.
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      isVerified: true,
+      isBanned: true,
+    },
+  });
+
+  if (!user || user.isBanned) {
+    throw new Error('User not found or banned');
+  }
+
   // Clean up old sessions if needed
   const existingTokens = await prisma.refreshToken.count({
     where: { userId, revokedAt: null },
@@ -48,22 +66,6 @@ export async function createUserSession(userId: string, userAgent?: string, ipAd
       ipAddress,
     },
   });
-
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      isVerified: true,
-      isBanned: true,
-    },
-  });
-
-  if (!user || user.isBanned) {
-    throw new Error('User not found or banned');
-  }
 
   const accessToken = await signAccessToken({
     userId: user.id,

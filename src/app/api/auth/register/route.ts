@@ -4,6 +4,7 @@ import { hashPassword } from '@/lib/auth/session';
 import { z } from 'zod';
 import { logger } from '@/lib/logger/winston';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { getClientIp } from '@/lib/security/getClientIp';
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -13,7 +14,7 @@ const registerSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    const ip = getClientIp(request);
     
     const rateCheck = await checkRateLimit(ip, 'auth');
     if (!rateCheck.allowed) {

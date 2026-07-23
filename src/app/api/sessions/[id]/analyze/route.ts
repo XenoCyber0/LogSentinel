@@ -4,6 +4,7 @@ import { verifyAccessToken } from '@/lib/auth/jwt';
 import { analyzeLog } from '@/lib/ai/analyzer';
 import { logger } from '@/lib/logger/winston';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { getClientIp } from '@/lib/security/getClientIp';
 import { z } from 'zod';
 
 const analyzeSchema = z.object({
@@ -16,7 +17,7 @@ export async function POST(
 ) {
   try {
     const { id } = await params;
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    const ip = getClientIp(request);
 
     const rateCheck = await checkRateLimit(ip, 'user');
     if (!rateCheck.allowed) {

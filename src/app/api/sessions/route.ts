@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { verifyAccessToken } from '@/lib/auth/jwt';
 import { logger } from '@/lib/logger/winston';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { getClientIp } from '@/lib/security/getClientIp';
 
 const createSessionSchema = z.object({
   title: z.string().min(1).max(200),
@@ -17,7 +18,7 @@ const createSessionSchema = z.object({
   // function payload limit, or a custom Request body reader check) first,
   // or the API will accept arbitrarily large payloads.
   rawLog: z.string().min(10).max(5 * 1024 * 1024),
-  tags: z.array(z.string()).optional(),
+  tags: z.array(z.string().max(50)).max(20).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    const ip = getClientIp(request);
     const rateCheck = await checkRateLimit(ip, 'user');
     if (!rateCheck.allowed) {
       return NextResponse.json({ data: null, error: 'Rate limit exceeded', status: 429 }, { status: 429 });

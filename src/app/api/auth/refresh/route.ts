@@ -1,9 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { refreshAccessToken } from '@/lib/auth/session';
 import { logger } from '@/lib/logger/winston';
+import { checkRateLimit } from '@/lib/security/rateLimiter';
+import { getClientIp } from '@/lib/security/getClientIp';
 
 export async function POST(request: NextRequest) {
   try {
+    const ip = getClientIp(request);
+
+    const rateCheck = await checkRateLimit(ip, 'auth');
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { data: null, error: 'Too many refresh attempts', status: 429 },
+        { status: 429 }
+      );
+    }
+
     const refreshToken = request.cookies.get('refreshToken')?.value;
 
     if (!refreshToken) {
