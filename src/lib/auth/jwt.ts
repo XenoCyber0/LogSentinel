@@ -1,16 +1,14 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, type JWTPayload as JoseJWTPayload } from 'jose';
 import { env } from '@/env';
 import crypto from 'crypto';
 
 const ALGORITHM = 'RS256';
 const ACCESS_TOKEN_EXPIRY = '15m';
 
-export interface JWTPayload {
+export interface JWTPayload extends JoseJWTPayload {
   userId: string;
   email: string;
   role: string;
-  iat?: number;
-  exp?: number;
 }
 
 export async function signAccessToken(payload: JWTPayload): Promise<string> {
@@ -70,7 +68,7 @@ async function importPublicKey(): Promise<CryptoKey> {
   );
 }
 
-function pemToArrayBuffer(pem: string, type: string): ArrayBuffer {
+function pemToArrayBuffer(pem: string, type: string): BufferSource {
   const base64 = pem
     .replace(`-----BEGIN ${type}-----`, '')
     .replace(`-----END ${type}-----`, '')

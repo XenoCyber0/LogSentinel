@@ -16,6 +16,10 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Next.js 16 defaults to Turbopack; an empty turbopack config silences the
+  // "webpack config present but no turbopack config" build error. The webpack
+  // externals below remain for explicit --webpack fallback builds.
+  turbopack: {},
   async headers() {
     return [
       {

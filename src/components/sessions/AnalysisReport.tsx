@@ -1,21 +1,24 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, Shield, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Shield } from 'lucide-react';
+import type { AnalysisResult } from '@/lib/ai/analyzer';
 
 interface AnalysisReportProps {
-  analysis: any;
+  analysis: AnalysisResult;
   sessionId: string;
 }
 
 export function AnalysisReport({ analysis }: AnalysisReportProps) {
-  const severityColor = {
+  const severityColor: Record<string, string> = {
     CRITICAL: 'text-red-400 bg-red-950 border-red-900',
     HIGH: 'text-orange-400 bg-orange-950 border-orange-900',
     MEDIUM: 'text-yellow-400 bg-yellow-950 border-yellow-900',
     LOW: 'text-blue-400 bg-blue-950 border-blue-900',
     INFO: 'text-zinc-400 bg-zinc-800 border-zinc-700',
-  }[analysis.severity] || 'text-zinc-400 bg-zinc-800 border-zinc-700';
+    UNKNOWN: 'text-zinc-400 bg-zinc-800 border-zinc-700',
+  };
+  const color = severityColor[analysis.severity] || severityColor.UNKNOWN;
 
   return (
     <div className="space-y-6">
@@ -24,7 +27,7 @@ export function AnalysisReport({ analysis }: AnalysisReportProps) {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle>AI Threat Summary</CardTitle>
-            <div className={`px-4 py-1 rounded-full text-sm font-medium border ${severityColor}`}>
+            <div className={`px-4 py-1 rounded-full text-sm font-medium border ${color}`}>
               {analysis.severity}
             </div>
           </div>
@@ -50,7 +53,7 @@ export function AnalysisReport({ analysis }: AnalysisReportProps) {
           </h3>
           
           <div className="space-y-4">
-            {analysis.threats.map((threat: any, index: number) => (
+            {analysis.threats.map((threat, index) => (
               <div key={index} className="threat-card border-l-4 border-red-500 bg-zinc-900/70 p-5 rounded-r-xl">
                 <div className="flex justify-between mb-3">
                   <div>
@@ -101,7 +104,7 @@ export function AnalysisReport({ analysis }: AnalysisReportProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-800">
-                  {analysis.ipAnalysis.map((ip: any, idx: number) => (
+                  {analysis.ipAnalysis.map((ip, idx) => (
                     <tr key={idx}>
                       <td className="py-3 font-mono text-xs">{ip.ip}</td>
                       <td className="py-3">{ip.requestCount}</td>

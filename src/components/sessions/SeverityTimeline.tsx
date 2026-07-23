@@ -1,9 +1,10 @@
 'use client';
 
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import type { AnalysisResult } from '@/lib/ai/analyzer';
 
 interface SeverityTimelineProps {
-  analysis: any;
+  analysis: AnalysisResult;
 }
 
 export function SeverityTimeline({ analysis }: SeverityTimelineProps) {

@@ -9,7 +9,7 @@ const anthropic = new Anthropic({
 
 export interface AnalysisResult {
   summary: string;
-  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO' | 'UNKNOWN';
   logFormat: string;
   timeRange: { start: string; end: string };
   totalLines: number;
