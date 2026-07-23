@@ -43,13 +43,12 @@ export async function POST(
       return NextResponse.json({ data: null, error: 'Session not found', status: 404 }, { status: 404 });
     }
 
-    if (session.analyzedAt && !request.body) {
-      return NextResponse.json({ data: { analysis: session.analysis }, error: null, status: 200 });
-    }
-
     const body = await request.json().catch(() => ({}));
     const validated = analyzeSchema.parse(body);
 
+    // Return cached analysis unless the client explicitly requests a re-run
+    // via { force: true }. (The previous `!request.body` check was dead code
+    // — request.body is a ReadableStream that is always truthy.)
     if (session.analysis && !validated.force) {
       return NextResponse.json({ data: { analysis: session.analysis }, error: null, status: 200 });
     }
@@ -68,6 +67,9 @@ export async function POST(
 
     // Create alerts from threats
     if (analysis.threats.length > 0) {
+      // Clear previous alerts so re-analysis does not stack duplicates.
+      await prisma.alert.deleteMany({ where: { sessionId: id } });
+
       const alerts = analysis.threats.map((threat) => ({
         sessionId: id,
         userId: payload.userId,
@@ -83,6 +85,9 @@ export async function POST(
 
     // Create IP records
     if (analysis.ipAnalysis.length > 0) {
+      // Clear previous IP records so re-analysis does not stack duplicates.
+      await prisma.iPRecord.deleteMany({ where: { sessionId: id } });
+
       const ipRecords = analysis.ipAnalysis.map((ipData) => ({
         sessionId: id,
         ipAddress: ipData.ip,

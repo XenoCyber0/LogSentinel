@@ -33,6 +33,9 @@ export default function SessionDetailPage() {
       toast.success('Re-analysis complete');
       refetch();
     },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Re-analysis failed');
+    },
   });
 
   if (isLoading || !data) {
