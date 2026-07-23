@@ -45,3 +45,11 @@ next-env.d.ts
 graphify-out/
 .config/
 .local/
+
+# Python (unrelated to Next.js app — prevents scripts like test_glm.py from leaking keys)
+*.py
+__pycache__/
+
+# Stray log files in repo root
+*-migrate.log
+pg-migrate.log
