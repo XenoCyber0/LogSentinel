@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 
 // Next.js 16 renamed `middleware.ts` to `proxy.ts` (edge runtime is NOT
 // supported — proxy runs on Node.js only). This proxy is the first line of
-// defense for the (dashboard)/* route group: it checks for the httpOnly
+// defense for the /dashboard/* routes: it checks for the httpOnly
 // `refreshToken` cookie. If absent, we redirect to /login before the
 // dashboard layout ever renders.
 //
@@ -29,17 +29,12 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // The (dashboard) route group in the App Router does NOT add a URL
-  // segment — its pages resolve to /, /alerts, /sessions, /sessions/:id,
-  // /sessions/new. Match exactly those paths so we don't gate /login or
+  // The dashboard routes live under /dashboard/* (real URL segment, not a
+  // route group). Match all dashboard paths so we don't gate /login or
   // /register (which are in the (auth) group at /login, /register) or any
-  // other public route. Exclude /api, /_next, and static files via the
-  // negative-lookahead pattern.
+  // other public route.
   matcher: [
-    '/',
-    '/alerts/:path*',
-    '/sessions',
-    '/sessions/new',
-    '/sessions/:path*',
+    '/dashboard',
+    '/dashboard/:path*',
   ],
 };

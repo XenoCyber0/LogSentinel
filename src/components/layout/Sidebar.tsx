@@ -6,8 +6,6 @@ import {
   LayoutDashboard,
   FileText,
   AlertTriangle,
-  Search,
-  Settings,
   LogOut
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
@@ -18,8 +16,6 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/sessions', label: 'Log Sessions', icon: FileText },
   { href: '/dashboard/alerts', label: 'Alerts', icon: AlertTriangle },
-  { href: '/dashboard/forensics', label: 'Forensics', icon: Search },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar() {
