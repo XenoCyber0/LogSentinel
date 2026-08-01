@@ -134,17 +134,46 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
       maxTokens: 4096,
     });
 
-    // Extract JSON from response
-    let jsonText = text.trim();
+    // Extract JSON from response. Weaker models often add prose before/after
+    // the JSON blob ("Here's the analysis: ...", "Let me know if..."). Find
+    // the JSON structurally by brace matching instead of trusting the wrapping.
+    const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
 
-    // Handle possible markdown code blocks
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/```json\n?/, '').replace(/```$/, '');
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/```\n?/, '').replace(/```$/, '');
+    // Find the first '{', then scan for its matching '}'. Strings count toward
+    // depth only when outside a string literal so braces inside "msg" don't
+    // throw us off.
+    const start = cleaned.indexOf('{');
+    let end = -1;
+    if (start >= 0) {
+      let depth = 0;
+      let inString = false;
+      let escape = false;
+      for (let i = start; i < cleaned.length; i++) {
+        const ch = cleaned[i];
+        if (escape) {
+          escape = false;
+        } else if (ch === '\\') {
+          escape = true;
+        } else if (ch === '"') {
+          inString = !inString;
+        } else if (!inString) {
+          if (ch === '{') depth++;
+          else if (ch === '}') {
+            depth--;
+            if (depth === 0) {
+              end = i + 1;
+              break;
+            }
+          }
+        }
+      }
     }
 
-    const parsed = JSON.parse(jsonText) as AnalysisResult;
+    if (start < 0 || end < 0) {
+      throw new Error(`No JSON object found in AI response. First 200 chars: ${cleaned.slice(0, 200)}`);
+    }
+
+    const parsed = JSON.parse(cleaned.slice(start, end)) as AnalysisResult;
 
     // Validate result structure
     if (!parsed.summary || !parsed.severity || !Array.isArray(parsed.threats)) {
