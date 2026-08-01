@@ -241,17 +241,11 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
       );
     }
 
-    // Transient failure (rate limit, 5xx, network) — preserve prior behavior.
-    return {
-      summary: 'Analysis temporarily unavailable. Manual review recommended.',
-      severity: 'UNKNOWN',
-      logFormat: 'UNKNOWN',
-      timeRange: { start: '', end: '' },
-      totalLines: sanitized.split('\n').length,
-      threats: [],
-      ipAnalysis: [],
-      timeline: [],
-      recommendations: ['Automated analysis could not complete. Retry later or review logs manually.'],
-    };
+    // Every failure path now throws, with the underlying reason embedded so
+    // the analyst sees "rate limit (429)" or "model not found" instead of a
+    // vague 'try later' placeholder that hides real bugs.
+    throw new Error(
+      `Analysis failed (${error instanceof AIProviderError ? error.provider : 'unknown'}${status ? `, HTTP ${status}` : ''}): ${msg.slice(0, 300)}`,
+    );
   }
 }

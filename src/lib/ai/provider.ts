@@ -92,7 +92,9 @@ class AnthropicProvider implements IAIProvider {
 interface ChatCompletionResponse {
   choices?: Array<{
     message?: { content?: string | null };
+    finish_reason?: string | null;
   }>;
+  error?: { message?: string; code?: number; type?: string };
 }
 
 class OpenAICompatibleProvider implements IAIProvider {
@@ -137,10 +139,29 @@ class OpenAICompatibleProvider implements IAIProvider {
     }
 
     const json = (await res.json()) as ChatCompletionResponse;
-    const text = json.choices?.[0]?.message?.content;
-    if (typeof text !== 'string' || text.length === 0) {
+
+    // OpenRouter returns HTTP 200 with an embedded `error` field for some
+    // upstream failures (rate limits on free models, provider down). Fail
+    // hard so the analyzer's catch sees the real reason.
+    if (json.error) {
       throw new AIProviderError(
-        'OpenAI-compatible provider returned empty content',
+        `Provider error: ${json.error.message ?? 'unknown'}`,
+        json.error.code,
+        'openai-compatible',
+      );
+    }
+
+    const choice = json.choices?.[0];
+    const text = choice?.message?.content;
+
+    // Empty content on a successful response usually means a stop-finish or
+    // refusal. Both are informational — surface them.
+    if (typeof text !== 'string' || text.length === 0) {
+      const finishReason = choice?.finish_reason ?? 'unknown';
+      throw new AIProviderError(
+        `Provider returned empty content (finish_reason=${finishReason}). ` +
+          'Free-tier models sometimes truncate or refuse long prompts. ' +
+          'Try a different model in OPENAI_COMPATIBLE_MODEL.',
         undefined,
         'openai-compatible',
       );
