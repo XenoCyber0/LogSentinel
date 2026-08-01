@@ -63,7 +63,61 @@ Analyze the provided log and return ONLY valid JSON matching this exact schema:
     "count": number
   }],
   "recommendations": string[]
-}`;
+}
+
+IMPORTANT: For "logFormat" return exactly one of these values (no others, no descriptions):
+APACHE | NGINX | SYSLOG | AWS_CLOUDTRAIL | GCP_AUDIT | AZURE_ACTIVITY | KUBERNETES | DOCKER | JSON | CUSTOM | UNKNOWN
+If the log mixes multiple formats, return the dominant one. If unsure, return UNKNOWN.`;
+
+// ---------------------------------------------------------------------------
+// Post-parse normalisation — weaker models emit free-form text where the schema
+// has enums. Map them before returning so the route layer can trust the result.
+// ---------------------------------------------------------------------------
+
+const SEVERITY_ORDER: AnalysisResult['severity'][] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
+
+function normaliseSeverity(input: unknown): AnalysisResult['severity'] {
+  const upper = String(input ?? '').toUpperCase();
+  const hit = SEVERITY_ORDER.find((s) => upper.startsWith(s));
+  return hit ?? 'UNKNOWN';
+}
+
+const LOG_FORMAT_VALUES = [
+  'APACHE',
+  'NGINX',
+  'SYSLOG',
+  'AWS_CLOUDTRAIL',
+  'GCP_AUDIT',
+  'AZURE_ACTIVITY',
+  'KUBERNETES',
+  'DOCKER',
+  'JSON',
+  'CUSTOM',
+] as const;
+type LogFormatValue = (typeof LOG_FORMAT_VALUES)[number];
+
+const LOG_FORMAT_HINTS: Array<[RegExp, LogFormatValue]> = [
+  [/apache/i, 'APACHE'],
+  [/nginx/i, 'NGINX'],
+  [/syslog|rsyslog|syslogd|auth\.log/i, 'SYSLOG'],
+  [/cloudtrail|aws/i, 'AWS_CLOUDTRAIL'],
+  [/gcp|google|stackdriver/i, 'GCP_AUDIT'],
+  [/azure/i, 'AZURE_ACTIVITY'],
+  [/kube/i, 'KUBERNETES'],
+  [/docker|container/i, 'DOCKER'],
+  [/json/i, 'JSON'],
+];
+
+function normaliseLogFormat(input: unknown): LogFormatValue {
+  const str = String(input ?? '').trim();
+  const upper = str.toUpperCase();
+  const exact = LOG_FORMAT_VALUES.find((v) => v === upper);
+  if (exact) return exact;
+  for (const [pattern, value] of LOG_FORMAT_HINTS) {
+    if (pattern.test(str)) return value;
+  }
+  return 'CUSTOM'; // safe fallback — never UNKNOWN (custom is more informative)
+}
 
 export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
   const sanitized = sanitizeLogInput(logContent);
@@ -90,12 +144,26 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
       jsonText = jsonText.replace(/```\n?/, '').replace(/```$/, '');
     }
 
-    const analysis = JSON.parse(jsonText) as AnalysisResult;
+    const parsed = JSON.parse(jsonText) as AnalysisResult;
 
     // Validate result structure
-    if (!analysis.summary || !analysis.severity || !Array.isArray(analysis.threats)) {
+    if (!parsed.summary || !parsed.severity || !Array.isArray(parsed.threats)) {
       throw new Error('Invalid analysis structure returned');
     }
+
+    // Normalise free-form model output against the DB enums. Weaker models ignore
+    // the enum constraint and emit prose like "Apache/Nginx Combined Log Format"
+    // or severity strings like "High"/"critical". Anything unmatched folds to a
+    // safe enum value — never throw on data shape after JSON.parse succeeded.
+    const analysis: AnalysisResult = {
+      ...parsed,
+      severity: normaliseSeverity(parsed.severity),
+      logFormat: normaliseLogFormat(parsed.logFormat),
+      threats: (parsed.threats ?? []).map((t) => ({
+        ...t,
+        severity: normaliseSeverity(t.severity),
+      })),
+    };
 
     logger.info('Log analysis completed', {
       severity: analysis.severity,
