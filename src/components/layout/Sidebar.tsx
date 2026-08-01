@@ -6,7 +6,9 @@ import {
   LayoutDashboard,
   FileText,
   AlertTriangle,
-  LogOut
+  LogOut,
+  Settings,
+  Shield,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { apiClient } from '@/lib/api/client';
@@ -17,7 +19,14 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/sessions', label: 'Log Sessions', icon: FileText },
   { href: '/dashboard/alerts', label: 'Alerts', icon: AlertTriangle },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
+
+const adminNavItem = {
+  href: '/dashboard/admin',
+  label: 'Admin',
+  icon: Shield,
+};
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -76,6 +85,37 @@ export function Sidebar() {
               </Link>
             );
           })}
+
+          {user?.role === 'ADMIN' && (
+            <>
+              <div className="px-3 pt-4 pb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+                Admin
+              </div>
+              {(() => {
+                const Icon = adminNavItem.icon;
+                const isActive = pathname.startsWith(adminNavItem.href);
+                return (
+                  <Link
+                    href={adminNavItem.href}
+                    className={cn(
+                      'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-gradient-to-r from-red-500/15 to-amber-500/10 text-red-100 ring-1 ring-inset ring-red-500/30'
+                        : 'text-zinc-400 hover:bg-zinc-900 hover:text-white'
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        'h-4 w-4 transition-colors',
+                        isActive ? 'text-red-300' : 'text-zinc-500 group-hover:text-zinc-300'
+                      )}
+                    />
+                    {adminNavItem.label}
+                  </Link>
+                );
+              })()}
+            </>
+          )}
         </nav>
       </div>
 

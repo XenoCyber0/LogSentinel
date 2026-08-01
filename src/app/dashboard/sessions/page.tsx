@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, Calendar, FileText } from 'lucide-react';
 import { apiClient } from '@/lib/api/client';
 import { useAuthStore } from '@/stores/authStore';
+import { ExportButton } from '@/components/ExportButton';
 import { formatDate } from '@/lib/utils';
 
 interface SessionListItem {
@@ -38,11 +39,14 @@ export default function SessionsPage() {
           <h1 className="text-3xl font-semibold tracking-tight">Log Sessions</h1>
           <p className="text-zinc-400 mt-1">All analyzed log files and paste sessions</p>
         </div>
-        <Link href="/dashboard/sessions/new">
-          <Button>
-            <Plus className="h-4 w-4 mr-2" /> New Session
-          </Button>
-        </Link>
+        <div className="flex items-center gap-3">
+          <ExportButton type="sessions" />
+          <Link href="/dashboard/sessions/new">
+            <Button>
+              <Plus className="h-4 w-4 mr-2" /> New Session
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {isLoading ? (

@@ -81,8 +81,11 @@ export default function DashboardHome() {
     refetchInterval: 15000, // stay fresh
   });
 
-  const sessions = sessionsData?.sessions ?? [];
-  const alerts = alertsData?.alerts ?? [];
+  // Memoize so the derived useMemos below only recompute when the *server
+  // data* changes — not because the fallback array literal has a new identity
+  // every render.
+  const sessions = useMemo(() => sessionsData?.sessions ?? [], [sessionsData]);
+  const alerts = useMemo(() => alertsData?.alerts ?? [], [alertsData]);
   const unreadAlerts = alerts.filter((a) => !a.isRead);
   const criticalCount = alerts.filter((a) => a.severity === 'CRITICAL').length;
 
