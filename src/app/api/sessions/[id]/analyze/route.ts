@@ -51,7 +51,24 @@ export async function POST(
     // Return cached analysis unless the client explicitly requests a re-run
     // via { force: true }. (The previous `!request.body` check was dead code
     // — request.body is a ReadableStream that is always truthy.)
-    if (session.analysis && !validated.force) {
+    //
+    // Fallback-shape results (written by older builds before auth/config errors
+    // were distinguished from real ones) must NOT be reused — they're the "AI
+    // Threat Summary: Analysis failed" payload that made the product look
+    // broken, and they were erroneously stamped analyzedAt. Detect by the
+    // duplicate severity/logFormat=UNKNOWN plus empty threat list.
+    const cached = session.analysis as {
+      severity?: string;
+      logFormat?: string;
+      threats?: unknown[];
+    } | null;
+    const isCachedFallback =
+      cached != null &&
+      cached.severity === 'UNKNOWN' &&
+      cached.logFormat === 'UNKNOWN' &&
+      Array.isArray(cached.threats) &&
+      cached.threats.length === 0;
+    if (session.analysis && !validated.force && !isCachedFallback) {
       return NextResponse.json({ data: { analysis: session.analysis }, error: null, status: 200 });
     }
 
@@ -119,7 +136,16 @@ export async function POST(
 
     return NextResponse.json({ data: { analysis }, error: null, status: 200 });
   } catch (error: unknown) {
-    logger.error('Analysis failed', { error: getErrorMessage(error) });
-    return NextResponse.json({ data: null, error: 'Analysis failed', status: 500 }, { status: 500 });
+    const message = getErrorMessage(error);
+    logger.error('Analysis failed', { error: message, sessionId: request.nextUrl.pathname });
+    // Analyzer throws on configuration errors (bad key, retired model) —
+    // pass those messages through so the analyst sees a real signal
+    // instead of a generic "Analysis failed" toast.
+    const isConfigError =
+      /authentication|ANTHROPIC_API_KEY|model unavailable|retired/i.test(message);
+    return NextResponse.json(
+      { data: null, error: isConfigError ? message : 'Analysis failed', status: 500 },
+      { status: 500 },
+    );
   }
 }

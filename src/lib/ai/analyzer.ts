@@ -3,8 +3,15 @@ import { env } from '@/env';
 import { sanitizeLogInput } from './sanitizer';
 import { logger } from '@/lib/logger/winston';
 
+// Web apps commonly load .env with dotenv-style quote-stripping, but Next.js
+// does not automatically do that for values assigned to `process.env` by the
+// host (PM2/systemd/Docker). Strip quotes defensively so a value like
+//   ANTHROPIC_API_KEY="sk-ant-..."
+// works the same as the unquoted form.
+const rawKey = env.ANTHROPIC_API_KEY.trim().replace(/^["']|["']$/g, '');
+
 const anthropic = new Anthropic({
-  apiKey: env.ANTHROPIC_API_KEY,
+  apiKey: rawKey,
 });
 
 export interface AnalysisResult {
@@ -120,14 +127,38 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
 
     return analysis;
   } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    // Authentication / configuration errors are NOT analysis failures — they're
+    // operator problems. Surface them loudly so the caller returns a real error
+    // to the analyst instead of persisting a fabricated "manual review"
+    // analysis that makes the product look broken.
+    const isAuthError =
+      (error instanceof Anthropic.APIError && error.status === 401) ||
+      /api key is invalid/i.test(msg);
+    const isConfigError =
+      (error instanceof Anthropic.APIError && error.status === 404) || // retired/renamed model
+      isAuthError;
+
     logger.error('Claude analysis failed', {
-      error: error instanceof Error ? error.message : String(error),
+      error: msg,
+      status: error instanceof Anthropic.APIError ? error.status : undefined,
+      isConfigError,
       logLength: sanitized.length,
     });
-    
-    // Return safe fallback analysis
+
+    if (isConfigError) {
+      // Throw so the API route persists nothing and returns 500 with a clear
+      // message (and doesn't stamp analyzedAt or store severity=UNKNOWN).
+      throw new Error(
+        isAuthError
+          ? 'AI provider authentication failed. Check ANTHROPIC_API_KEY in server environment.'
+          : 'AI provider model unavailable. The configured Claude model may be retired — update lib/ai/analyzer.ts.',
+      );
+    }
+
+    // Transient failure (rate limit, 5xx, network) — preserve prior behavior.
     return {
-      summary: 'Analysis failed. Manual review recommended.',
+      summary: 'Analysis temporarily unavailable. Manual review recommended.',
       severity: 'UNKNOWN',
       logFormat: 'UNKNOWN',
       timeRange: { start: '', end: '' },
@@ -135,7 +166,7 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
       threats: [],
       ipAnalysis: [],
       timeline: [],
-      recommendations: ['Unable to complete automated analysis. Please review logs manually.'],
+      recommendations: ['Automated analysis could not complete. Retry later or review logs manually.'],
     };
   }
 }
