@@ -124,8 +124,13 @@ class OpenAICompatibleProvider implements IAIProvider {
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
+      const snippet = body.slice(0, 300);
+      // 400 with "not a valid model ID" (OpenRouter), 404 from endpoint, and
+      // 401 auth all indicate *operator problems* — they need to surface, not
+      // be retried silently as "transient". Upstream rate limits (429) and
+      // 5xx ARE transient so leave those to the analyzer's soft-fallback path.
       throw new AIProviderError(
-        `OpenAI-compatible request failed (${res.status} ${res.statusText}): ${body.slice(0, 200)}`,
+        `OpenAI-compatible request failed (${res.status} ${res.statusText}): ${snippet}`,
         res.status,
         'openai-compatible',
       );

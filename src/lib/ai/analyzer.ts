@@ -112,8 +112,11 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
     // persisting a fabricated "manual review" analysis that makes the product
     // look broken.
     const status = error instanceof AIProviderError ? error.status : undefined;
-    const isAuthError = status === 401 || /api key is invalid/i.test(msg);
-    const isModelError = status === 404 || /model.*not found|retired|unavailable/i.test(msg);
+    const isAuthError = status === 401 || /api key is invalid|unauthorized/i.test(msg);
+    const isModelError =
+      status === 404 ||
+      (status === 400 && /model|invalid/i.test(msg)) || // OpenRouter 400 for bad model IDs
+      /model.*not found|not a valid model|retired|unavailable|does not exist/i.test(msg);
     // Missing env-var errors from getAIProvider() arrive as AIProviderError w/o status
     const isMisconfigured = error instanceof AIProviderError && status === undefined;
     const isConfigError = isAuthError || isModelError || isMisconfigured;
