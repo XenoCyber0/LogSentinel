@@ -1,18 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { env } from '@/env';
+import { getAIProvider, AIProviderError } from '@/lib/ai/provider';
 import { sanitizeLogInput } from './sanitizer';
 import { logger } from '@/lib/logger/winston';
-
-// Web apps commonly load .env with dotenv-style quote-stripping, but Next.js
-// does not automatically do that for values assigned to `process.env` by the
-// host (PM2/systemd/Docker). Strip quotes defensively so a value like
-//   ANTHROPIC_API_KEY="sk-ant-..."
-// works the same as the unquoted form.
-const rawKey = env.ANTHROPIC_API_KEY.trim().replace(/^["']|["']$/g, '');
-
-const anthropic = new Anthropic({
-  apiKey: rawKey,
-});
 
 export interface AnalysisResult {
   summary: string;
@@ -85,26 +73,16 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
   }
 
   try {
-    const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 4096,
+    const provider = getAIProvider();
+    const text = await provider.complete({
       system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: `Analyze this log data:\n\n${sanitized.substring(0, 120000)}`,
-        },
-      ],
+      user: `Analyze this log data:\n\n${sanitized.substring(0, 120000)}`,
+      maxTokens: 4096,
     });
 
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new Error('Unexpected response format from Claude');
-    }
-
     // Extract JSON from response
-    let jsonText = content.text.trim();
-    
+    let jsonText = text.trim();
+
     // Handle possible markdown code blocks
     if (jsonText.startsWith('```json')) {
       jsonText = jsonText.replace(/```json\n?/, '').replace(/```$/, '');
@@ -129,30 +107,37 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     // Authentication / configuration errors are NOT analysis failures — they're
-    // operator problems. Surface them loudly so the caller returns a real error
-    // to the analyst instead of persisting a fabricated "manual review"
-    // analysis that makes the product look broken.
-    const isAuthError =
-      (error instanceof Anthropic.APIError && error.status === 401) ||
-      /api key is invalid/i.test(msg);
-    const isConfigError =
-      (error instanceof Anthropic.APIError && error.status === 404) || // retired/renamed model
-      isAuthError;
+    // operator problems (bad key, retired model, missing env var). Surface them
+    // loudly so the caller returns a real error to the analyst instead of
+    // persisting a fabricated "manual review" analysis that makes the product
+    // look broken.
+    const status = error instanceof AIProviderError ? error.status : undefined;
+    const isAuthError = status === 401 || /api key is invalid/i.test(msg);
+    const isModelError = status === 404 || /model.*not found|retired|unavailable/i.test(msg);
+    // Missing env-var errors from getAIProvider() arrive as AIProviderError w/o status
+    const isMisconfigured = error instanceof AIProviderError && status === undefined;
+    const isConfigError = isAuthError || isModelError || isMisconfigured;
 
-    logger.error('Claude analysis failed', {
+    logger.error('Log analysis failed', {
       error: msg,
-      status: error instanceof Anthropic.APIError ? error.status : undefined,
+      provider: error instanceof AIProviderError ? error.provider : 'unknown',
+      status,
       isConfigError,
       logLength: sanitized.length,
     });
 
     if (isConfigError) {
-      // Throw so the API route persists nothing and returns 500 with a clear
-      // message (and doesn't stamp analyzedAt or store severity=UNKNOWN).
+      // Throw so the API route persists nothing (doesn't stamp analyzedAt or
+      // store severity=UNKNOWN) and returns a message that tells the operator
+      // exactly what to fix.
       throw new Error(
-        isAuthError
-          ? 'AI provider authentication failed. Check ANTHROPIC_API_KEY in server environment.'
-          : 'AI provider model unavailable. The configured Claude model may be retired — update lib/ai/analyzer.ts.',
+        isMisconfigured
+          ? msg // pass the env-var guidance straight through
+          : isAuthError
+            ? 'AI provider authentication failed. Check the API key in your server environment ' +
+                `(AI_PROVIDER=${process.env.AI_PROVIDER ?? 'anthropic'}).`
+            : 'AI provider model unavailable. The configured model may be retired or renamed — ' +
+                'check OPENAI_COMPATIBLE_MODEL or lib/ai/provider.ts.',
       );
     }
 
