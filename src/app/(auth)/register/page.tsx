@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { LogoMark } from '@/components/brand/Logo';
 import axios, { AxiosError } from 'axios';
 
 const registerSchema = z.object({
@@ -53,9 +54,16 @@ export default function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 rounded bg-red-600 mb-6" />
+          <div className="mx-auto mb-6 flex items-center justify-center">
+            <LogoMark animated className="h-12 w-12" />
+          </div>
           <h1 className="text-3xl font-semibold tracking-tight">Create account</h1>
-          <p className="text-zinc-400 mt-2">Start analyzing logs with AI</p>
+          <p className="text-zinc-400 mt-2 text-sm">
+            <span className="bg-gradient-to-r from-cyan-300 to-teal-300 bg-clip-text text-transparent font-medium">
+              LogSentinel
+            </span>{' '}
+            — AI threat analysis
+          </p>
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8">

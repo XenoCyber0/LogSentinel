@@ -78,7 +78,9 @@ export async function POST(request: NextRequest) {
       data: {
         user: session.user,
         accessToken: session.accessToken,
-        refreshToken: session.refreshToken,
+        // refreshToken is intentionally NOT included in the JSON body — it is
+        // set below as an httpOnly cookie only. Returning it in the body would
+        // expose it to any JS/XSS and defeat the browser's cookie protection.
       },
       error: null,
       status: 200,

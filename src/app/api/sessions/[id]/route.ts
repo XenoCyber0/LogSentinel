@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db/prisma';
 import { verifyAccessToken } from '@/lib/auth/jwt';
 import { z } from 'zod';
 import { logger } from '@/lib/logger/winston';
+import { getErrorMessage } from '@/lib/utils/errors';
 
 const updateSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -74,7 +75,8 @@ export async function PATCH(
     }
 
     return NextResponse.json({ data: { success: true }, error: null, status: 200 });
-  } catch {
+  } catch (error) {
+    logger.error('Failed to update session', { error: getErrorMessage(error) });
     return NextResponse.json({ data: null, error: 'Update failed', status: 500 }, { status: 500 });
   }
 }
@@ -98,7 +100,8 @@ export async function DELETE(
     });
 
     return NextResponse.json({ data: { success: true }, error: null, status: 200 });
-  } catch {
+  } catch (error) {
+    logger.error('Failed to delete session', { error: getErrorMessage(error) });
     return NextResponse.json({ data: null, error: 'Delete failed', status: 500 }, { status: 500 });
   }
 }

@@ -1,36 +1,112 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Log Analyzer
 
-## Getting Started
+Enterprise-grade AI-powered log analysis for security analysts. Upload raw log files, get structured threat reports with severity ratings, IP analysis, and remediation recommendations — powered by Claude.
 
-First, run the development server:
+## Stack
+
+- **Framework:** Next.js 16 (App Router) + React 19 + TypeScript
+- **Database:** PostgreSQL 16 via Prisma 7 (pg adapter)
+- **Auth:** RS256 JWT access tokens (15 min, in-memory) + rotating httpOnly refresh-token cookies (30 days) with family-reuse detection
+- **AI:** Anthropic Claude (`claude-3-5-sonnet`) with prompt-injection sanitization
+- **State:** Zustand (auth) + TanStack Query (server state) + React Hook Form
+- **UI:** Tailwind CSS 4 + Radix UI + Recharts + sonner
+
+## Prerequisites
+
+- Node.js 20+
+- Docker (for local PostgreSQL) or a hosted Postgres (e.g. Supabase)
+
+## Setup
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# 1. Copy env template and fill in values
+cp .env.example .env
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+```bash
+# 2. Start PostgreSQL (local dev)
+docker compose up -d
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# 3. Install + migrate + seed
+npm install
+npx prisma migrate dev
+npm run prisma:seed
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# 4. Run
+npm run dev
+```
 
-## Learn More
+Open <http://localhost:3000>. Log in with the seeded demo account:
 
-To learn more about Next.js, take a look at the following resources:
+```
+analyst@seclab.io / Demo1234!
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Environment variables
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+See [`.env.example`](.env.example) for the full annotated list. Required:
 
-## Deploy on Vercel
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` | RSA keypair (PKCS#8 / SPKI PEM, newlines escaped as `\n`) |
+| `ANTHROPIC_API_KEY` | Claude API key (`sk-ant-...`) |
+| `UPSTASH_REDIS_REST_URL` / `..._TOKEN` | Distributed rate limiting |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Storage (optional at runtime) |
+| `NEXT_PUBLIC_APP_URL` | App origin (JWT issuer/audience) |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+JWT key generation:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out jwt_private_pkcs8.pem
+openssl rsa -pubout -in jwt_private_pkcs8.pem -out jwt_public.pem
+```
+
+## Scripts
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Dev server |
+| `npm run build` / `start` | Production build / serve |
+| `npm run lint` / `lint:fix` | ESLint |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run prisma:migrate` | Run migrations |
+| `npm run prisma:seed` | Seed demo data |
+| `npm run db:reset` | Drop + re-migrate + re-seed (destructive) |
+
+## Architecture
+
+```
+src/
+├── app/
+│   ├── (auth)/login|register/    # Public auth pages
+│   ├── dashboard/                # Protected app (proxy.ts gates on refresh cookie)
+│   └── api/
+│       ├── auth/                 # login / logout / refresh / register
+│       ├── sessions/             # CRUD + /:id/analyze (Claude)
+│       └── alerts/
+├── lib/
+│   ├── ai/                       # analyzer.ts (Claude) + sanitizer.ts (prompt-injection guard)
+│   ├── auth/                     # jwt.ts (RS256 sign/verify) + session.ts (refresh rotation)
+│   ├── db/prisma.ts              # Prisma client (globalThis singleton)
+│   ├── security/                 # rateLimiter.ts + getClientIp.ts
+│   └── logger/winston.ts
+├── proxy.ts                      # Edge proxy: redirects /dashboard/* → /login if no cookie
+└── stores/authStore.ts           # Zustand; accessToken in-memory only
+```
+
+**Security model:** Access tokens are short-lived RS256 JWTs kept in memory (never persisted to localStorage). Refresh tokens are random 64-byte hex strings stored as SHA-256 hashes in Postgres, set as httpOnly `SameSite=Strict` cookies, and rotated on every refresh. Reuse of a rotated token invalidates the entire token family.
+
+**Contributor guidance:** see [`CLAUDE.md`](CLAUDE.md) and [`AGENTS.md`](AGENTS.md).
+
+## Docker (production image)
+
+```bash
+docker build -t ai-log-analyzer .
+```
+
+The `Dockerfile` produces a standalone Next.js build (`output: 'standalone'`). You still need a reachable PostgreSQL — `docker-compose.yml` only provisions the database for local dev.

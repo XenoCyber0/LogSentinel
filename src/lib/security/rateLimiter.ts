@@ -1,70 +1,69 @@
-import { RateLimiterMemory } from 'rate-limiter-flexible';
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
+import { env } from '@/env';
 import { logger } from '@/lib/logger/winston';
 
-// NOTE: Limiters below are in-memory and per-process. They are NOT shared
-// across instances — running multiple Node processes (or the standalone
-// server behind a load balancer) will give each instance its own counter
-// and the effective limit will be N * configured_limit. A previous version
-// of this file tried to use `new Redis(UPSTASH_REDIS_REST_URL)` from ioredis
-// to share state, but ioredis expects a TCP connection string and Upstash
-// exposes an HTTPS REST API, so the connection failed silently and we fell
-// back to in-memory anyway. To enable real distributed rate limiting, use
-// @upstash/ratelimit with the existing UPSTASH_REDIS_REST_URL /
-// UPSTASH_REDIS_REST_TOKEN env vars once real Upstash credentials are
-// provisioned.
+// Distributed rate limiting backed by Upstash Redis (REST). Counters are shared
+// across all Node instances, so the configured limit is the effective limit even
+// behind a load balancer or in multi-instance deployments. Uses UPSTASH_REDIS_REST_URL /
+// UPSTASH_REDIS_REST_TOKEN from env.ts.
+//
+// A previous version of this file used in-memory `RateLimiterMemory`, which is
+// per-process and silently multiplied limits by instance count. It also tried
+// `new Redis(UPSTASH_REDIS_REST_URL)` from ioredis, but ioredis expects a TCP
+// connection string while Upstash exposes HTTPS REST — that connection failed
+// silently. Using the official @upstash/redis REST client avoids both problems.
 
-const ipLimiter = new RateLimiterMemory({
-  keyPrefix: 'ip',
-  points: 100,
-  duration: 60,
+const redis = new Redis({
+  url: env.UPSTASH_REDIS_REST_URL,
+  token: env.UPSTASH_REDIS_REST_TOKEN,
 });
 
-const userLimiter = new RateLimiterMemory({
-  keyPrefix: 'user',
-  points: 1000,
-  duration: 3600,
+// Sliding-window limiters. `prefix` namespaces keys in Redis.
+const ipLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(100, '60 s'),
+  prefix: 'rl:ip',
 });
 
-const authLimiter = new RateLimiterMemory({
-  keyPrefix: 'auth',
-  points: 10,
-  duration: 60,
+const userLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(1000, '60 m'),
+  prefix: 'rl:user',
+});
+
+const authLimiter = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(10, '60 s'),
+  prefix: 'rl:auth',
 });
 
 export async function checkRateLimit(
   identifier: string,
   type: 'ip' | 'user' | 'auth' = 'ip'
 ): Promise<{ allowed: boolean; remaining: number; resetTime: number }> {
-  try {
-    let limiter;
-    switch (type) {
-      case 'auth':
-        limiter = authLimiter;
-        break;
-      case 'user':
-        limiter = userLimiter;
-        break;
-      default:
-        limiter = ipLimiter;
-    }
+  // Development convenience: when placeholder credentials are in use, skip the
+  // network hop and allow everything. Real limiting kicks in once real Upstash
+  // credentials are provisioned.
+  if (!env.UPSTASH_REDIS_REST_TOKEN || env.UPSTASH_REDIS_REST_TOKEN.startsWith('placeholder')) {
+    return { allowed: true, remaining: 1, resetTime: 0 };
+  }
 
-    const result = await limiter.consume(identifier);
-    
+  try {
+    const limiter =
+      type === 'auth' ? authLimiter : type === 'user' ? userLimiter : ipLimiter;
+
+    const result = await limiter.limit(identifier);
+
     return {
-      allowed: true,
-      remaining: result.remainingPoints,
-      resetTime: result.msBeforeNext,
+      allowed: result.success,
+      remaining: result.remaining,
+      // ms until the window resets — matches prior RateLimiterMemory semantics.
+      resetTime: Math.max(0, result.reset - Date.now()),
     };
   } catch (error: unknown) {
-    if (error && typeof error === 'object' && 'remainingPoints' in error) {
-      const rateError = error as { remainingPoints: number; msBeforeNext: number };
-      return {
-        allowed: false,
-        remaining: rateError.remainingPoints,
-        resetTime: rateError.msBeforeNext,
-      };
-    }
-    
+    // Fail-open on Redis/network errors so a rate-limit outage doesn't take the
+    // API down. Log loudly so the failure is observable.
     logger.error('Rate limiter error', { error: String(error) });
     return { allowed: true, remaining: 0, resetTime: 0 };
   }

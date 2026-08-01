@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/stores/authStore';
 import axios, { AxiosError } from 'axios';
 import { toast } from 'sonner';
+import { LogoMark } from '@/components/brand/Logo';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -58,9 +59,15 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-zinc-950 px-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 rounded bg-red-600 mb-6" />
-          <h1 className="text-3xl font-semibold tracking-tight">Welcome back</h1>
-          <p className="text-zinc-400 mt-2">Sign in to your security workspace</p>
+          <div className="mx-auto mb-6 flex items-center justify-center">
+            <LogoMark animated className="h-12 w-12" />
+          </div>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            <span className="bg-gradient-to-r from-cyan-300 to-teal-300 bg-clip-text text-transparent">
+              LogSentinel
+            </span>
+          </h1>
+          <p className="text-zinc-400 mt-2 text-sm">Sign in to your AI threat-analysis workspace</p>
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8">
@@ -110,9 +117,14 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-zinc-500">
-          Demo: analyst@seclab.io / Demo1234!
-        </p>
+        {/* Demo credentials are dev-only seed data (see prisma/seed.ts). Rendered
+            only outside production so production builds never surface a working
+            login hint. */}
+        {process.env.NODE_ENV === 'development' && (
+          <p className="text-center text-xs text-zinc-500">
+            Demo: analyst@seclab.io / Demo1234!
+          </p>
+        )}
       </div>
     </div>
   );

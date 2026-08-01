@@ -35,7 +35,9 @@ export async function POST(request: NextRequest) {
       data: {
         user: result.user,
         accessToken: result.accessToken,
-        refreshToken: result.refreshToken,
+        // refreshToken is NOT returned in the body — it is rotated below via the
+        // httpOnly cookie only. Keeping it out of the JSON prevents browser JS
+        // (and any XSS payload) from reading the long-lived credential.
       },
       error: null,
       status: 200,

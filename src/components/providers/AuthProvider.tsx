@@ -1,11 +1,18 @@
 'use client';
 
-// Minimal AuthProvider stub. The real auth state lives in the Zustand
-// `useAuthStore` (see src/stores/authStore.ts); this component exists
-// purely because src/app/layout.tsx wraps the tree in it, and the actual
-// access-token hydration on mount is handled by <AuthHydrator/> sitting
-// inside it. The Zustand store is the single source of truth — no React
-// context is needed because the store is a global hook.
+import { AuthHydrator } from './AuthHydrator';
+
+// Composition wrapper around the auth-hydration logic. The real auth state
+// lives in the Zustand `useAuthStore` (see src/stores/authStore.ts);
+// AuthStore persists only `user + isAuthenticated` (never the accessToken),
+// and AuthHydrator calls /api/auth/refresh on mount to mint a fresh access
+// token if the user is still logged in. This component exists solely to group
+// those concerns so the root layout (src/app/layout.tsx) reads naturally.
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
+  return (
+    <>
+      <AuthHydrator />
+      {children}
+    </>
+  );
 }

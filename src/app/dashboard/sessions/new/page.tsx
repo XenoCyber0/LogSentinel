@@ -34,7 +34,6 @@ export default function NewSessionPage() {
     register,
     handleSubmit,
     setValue,
-    watch,
     formState: { errors },
   } = useForm<SessionForm>({
     resolver: zodResolver(sessionSchema),
@@ -44,7 +43,11 @@ export default function NewSessionPage() {
     },
   });
 
-  const rawLog = watch('rawLog');
+  // We track rawLog length locally instead of react-hook-form's `watch()`.
+  // RHF's `watch` returns a new function each render which React Compiler
+  // cannot memoize; keeping display stats in a local state set by onChange
+  // avoids that while still showing the live char/line count.
+  const [rawLogStats, setRawLogStats] = useState({ length: 0, lines: 0 });
 
   const onSubmit = async (data: SessionForm) => {
     if (!accessToken) return;
@@ -93,10 +96,27 @@ export default function NewSessionPage() {
       const content = event.target?.result as string;
       setValue('rawLog', content);
       setValue('title', file.name.replace(/\.[^/.]+$/, ''));
+      setRawLogStats({
+        length: content.length,
+        lines: content.split('\n').length,
+      });
       toast.success('Log file loaded');
     };
     reader.readAsText(file);
   };
+
+  // Merge RHF registering for rawLog with a local onChange so the stats
+  // display can update without using `watch()`, which React Compiler cannot
+  // memoize.
+  const rawLogRegistration = register('rawLog', {
+    onChange: (e) => {
+      const v = (e.target as HTMLTextAreaElement).value ?? '';
+      setRawLogStats({
+        length: v.length,
+        lines: v.split('\n').length,
+      });
+    },
+  });
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -154,7 +174,7 @@ export default function NewSessionPage() {
 
           {pasteMode ? (
             <Textarea
-              {...register('rawLog')}
+              {...rawLogRegistration}
               className="font-mono text-sm h-[380px] bg-zinc-950"
               placeholder="Paste your log content here..."
             />
@@ -175,10 +195,10 @@ export default function NewSessionPage() {
             </div>
           )}
 
-          {rawLog && (
+          {rawLogStats.length > 0 && (
             <div className="mt-2 text-xs text-zinc-500 flex justify-between">
-              <span>{rawLog.length.toLocaleString()} characters</span>
-              <span>~{Math.round(rawLog.split('\n').length)} lines</span>
+              <span>{rawLogStats.length.toLocaleString()} characters</span>
+              <span>~{rawLogStats.lines} lines</span>
             </div>
           )}
           {errors.rawLog && <p className="text-red-400 text-sm mt-1">{errors.rawLog.message}</p>}

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#0d9488"/>
+    </linearGradient>
+  </defs>
+  <!-- Sentinel shield -->
+  <path d="M32 6 L54 14 V30 C54 46 44 56 32 60 C20 56 10 46 10 30 V14 Z"
+        fill="none" stroke="url(#g)" stroke-width="4" stroke-linejoin="round"/>
+  <!-- Radar sweep inside -->
+  <circle cx="32" cy="32" r="3.5" fill="url(#g)"/>
+  <path d="M32 32 L45 19 A17 17 0 0 1 49 33 Z" fill="url(#g)" opacity="0.9"/>
+  <circle cx="32" cy="32" r="11" fill="none" stroke="url(#g)" stroke-width="2" opacity="0.5"/>
+</svg>
