@@ -16,6 +16,7 @@ export function LogoMark({ className, animated = false }: LogoMarkProps) {
     <svg
       viewBox="0 0 64 64"
       aria-hidden="true"
+      data-ls-animated={animated ? 'true' : undefined}
       className={cn(animated && 'ls-logo-animated', 'h-6 w-6', className)}
     >
       <defs>

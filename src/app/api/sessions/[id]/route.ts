@@ -10,6 +10,11 @@ const updateSchema = z.object({
   description: z.string().max(500).optional(),
   tags: z.array(z.string()).optional(),
   isArchived: z.boolean().optional(),
+  // Allow the analyst to force-override the AI-derived severity (e.g. downgrade
+  // a false positive without re-running the model). Just a label — analysis JSON
+  // is untouched. PENDING exists in the UI for "not yet analyzed" but is NOT a
+  // real Severity enum value in the DB, so it isn't accepted here.
+  severity: z.enum(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'UNKNOWN']).optional(),
 });
 
 export async function GET(
