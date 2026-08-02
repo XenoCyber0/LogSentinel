@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { Prisma, Severity, LogFormat } from '@prisma/client';
 import { verifyAccessToken } from '@/lib/auth/jwt';
-import { analyzeLog } from '@/lib/ai/analyzer';
+import { analyzeLog, resolveFinalLogFormat } from '@/lib/ai/analyzer';
 import { logger } from '@/lib/logger/winston';
 import { checkRateLimit } from '@/lib/security/rateLimiter';
 import { getClientIp } from '@/lib/security/getClientIp';
@@ -12,6 +12,30 @@ import { z } from 'zod';
 const analyzeSchema = z.object({
   force: z.boolean().optional(),
 });
+
+/**
+ * Overlay values the server can determine more reliably than the LLM.
+ * The model is good at finding threats, bad at arithmetic and at labels for
+ * unrecognizable inputs — so two fields are fixed here:
+ *
+ *  - totalLines: counted from the actual log content (the DB column for this
+ *    does not exist; the UI MetaCard reads analysis.totalLines, which is why
+ *    sessions used to show "-" whenever the model omitted the field).
+ *  - logFormat: resolved by resolveFinalLogFormat (strict-majority line vote
+ *    as fallback when the AI returns UNKNOWN).
+ */
+function applyServerDeterminedFields(
+  analysis: Awaited<ReturnType<typeof analyzeLog>>,
+  rawLog: string,
+  finalFormat: LogFormat,
+) {
+  const totalLines = rawLog.split('\n').filter((line) => line.trim().length > 0).length;
+  return {
+    ...analysis,
+    totalLines,
+    logFormat: finalFormat,
+  };
+}
 
 export async function POST(
   request: NextRequest,
@@ -72,14 +96,19 @@ export async function POST(
       return NextResponse.json({ data: { analysis: session.analysis }, error: null, status: 200 });
     }
 
-    const analysis = await analyzeLog(session.rawLog);
+    const aiAnalysis = await analyzeLog(session.rawLog);
+    const finalFormat = resolveFinalLogFormat(
+      (aiAnalysis.logFormat as LogFormat | undefined) ?? 'UNKNOWN',
+      session.rawLog,
+    );
+    const analysis = applyServerDeterminedFields(aiAnalysis, session.rawLog, finalFormat);
 
     await prisma.logSession.update({
       where: { id },
       data: {
         analysis: analysis as unknown as Prisma.InputJsonValue,
         severity: analysis.severity as Severity,
-        logFormat: analysis.logFormat as LogFormat,
+        logFormat: finalFormat,
         analyzedAt: new Date(),
       },
     });

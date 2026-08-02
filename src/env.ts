@@ -14,6 +14,11 @@ export const env = createEnv({
     OPENAI_COMPATIBLE_API_KEY: z.string().optional(),
     OPENAI_COMPATIBLE_BASE_URL: z.string().url().default("https://openrouter.ai/api/v1"),
     OPENAI_COMPATIBLE_MODEL: z.string().default("meta-llama/llama-3.3-70b-instruct:free"),
+    // Hard cap on tokens sent to the AI per request. Default 6000 matches the
+    // tightest common free tier (Groq on_demand ≈ 12k TPM — we leave half for
+    // response + second retry). Raise to ~16000 for paid tiers, or remove the
+    // cap via AI_MAX_INPUT_TOKENS=0 if you're on Anthropic.
+    AI_MAX_INPUT_TOKENS: z.coerce.number().int().min(0).default(6000),
     UPSTASH_REDIS_REST_URL: z.string().url(),
     UPSTASH_REDIS_REST_TOKEN: z.string(),
     SUPABASE_URL: z.string().url(),
@@ -37,6 +42,7 @@ export const env = createEnv({
     OPENAI_COMPATIBLE_API_KEY: process.env.OPENAI_COMPATIBLE_API_KEY,
     OPENAI_COMPATIBLE_BASE_URL: process.env.OPENAI_COMPATIBLE_BASE_URL,
     OPENAI_COMPATIBLE_MODEL: process.env.OPENAI_COMPATIBLE_MODEL,
+    AI_MAX_INPUT_TOKENS: process.env.AI_MAX_INPUT_TOKENS,
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
     SUPABASE_URL: process.env.SUPABASE_URL,

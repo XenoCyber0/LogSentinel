@@ -232,7 +232,10 @@ export default function SessionDetailPage() {
               label="Analyzed"
               value={data.analyzedAt ? new Date(data.analyzedAt).toLocaleString() : 'Pending'}
             />
-            <MetaCard label="Lines" value={data.totalLines?.toLocaleString() ?? '—'} />
+            <MetaCard
+              label="Lines"
+              value={analysis.totalLines?.toLocaleString() ?? '—'}
+            />
             <MetaCard label="Alerts" value={String(data.alerts?.length ?? 0)} />
           </div>
         </div>

@@ -39,6 +39,14 @@ export interface AnalysisRequest {
 
 export interface IAIProvider {
   complete(req: AnalysisRequest): Promise<string>;
+  /**
+   * Token budget the caller should cap the user message to, so the request
+   * fits the provider's rate limit (TPM for most providers, per-request caps
+   * for some). From the env override AI_MAX_INPUT_TOKENS. undefined means no
+   * cap (Anthropic paid tiers). Converted to chars by the caller — callers
+   * should use a conservative ~2.2/token for log data, less for prose.
+   */
+  readonly maxInputTokens?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -59,6 +67,9 @@ function stripQuotes(value: string): string {
 class AnthropicProvider implements IAIProvider {
   private client: Anthropic;
   private model: string;
+
+  // Anthropic's paid tiers have high TPM/context; leave uncapped.
+  readonly maxInputTokens = undefined;
 
   constructor(apiKey: string, model = 'claude-3-5-sonnet-20241022') {
     this.client = new Anthropic({ apiKey });
@@ -98,11 +109,19 @@ interface ChatCompletionResponse {
 }
 
 class OpenAICompatibleProvider implements IAIProvider {
+  readonly maxInputTokens?: number;
+
   constructor(
     private baseUrl: string,
     private apiKey: string,
     private model: string,
-  ) {}
+    maxInputTokens?: number,
+  ) {
+    // 0 disables the cap. Positive numbers are honored verbatim so the
+    // operator can tighten for rate limits or loosen for paid tiers without
+    // redeploying code.
+    this.maxInputTokens = maxInputTokens && maxInputTokens > 0 ? maxInputTokens : undefined;
+  }
 
   async complete(req: AnalysisRequest): Promise<string> {
     const url = `${this.baseUrl.replace(/\/$/, '')}/chat/completions`;
@@ -221,6 +240,7 @@ export function getAIProvider(): IAIProvider {
     env.OPENAI_COMPATIBLE_BASE_URL,
     stripQuotes(apiKey),
     env.OPENAI_COMPATIBLE_MODEL,
+    env.AI_MAX_INPUT_TOKENS,
   );
   return cached;
 }

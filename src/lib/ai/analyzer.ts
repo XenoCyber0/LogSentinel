@@ -114,6 +114,98 @@ function normaliseLogFormat(input: unknown): LogFormatValue {
   return 'UNKNOWN'; // last-resort — the schema only allows the 6 values above
 }
 
+// ---------------------------------------------------------------------------
+// Local format detection — the AI gives up and returns UNKNOWN on mixed-format
+// pastes (access log + auth.log + Windows events), which made the "Log Format"
+// card permanently UNKNOWN for exactly the messy real-world logs analysts feed
+// it. Detect per-line shapes locally and take a strict-majority vote instead.
+//
+// Classifiers are ordered most-specific first; the first match wins a line's
+// vote. Each targets the LINE shape, not stray keywords: SSH lines in a mixed
+// paste vote AUTH only when they actually carry sshd/PAM markers, generic
+// syslog detects the classic BSD "Mon dd hh:mm:ss host process[pid]:" prefix,
+// Windows/Sysmon process-execution and KV lines vote APP, ISO/timestamped JSON
+// blobs vote APP, and HTTP request lines vote NGINX/APP depending on whether
+// they carry a client IP prefix (combined/apache style) or not.
+// ---------------------------------------------------------------------------
+const LINE_CLASSIFIERS: Array<[RegExp, LogFormatValue]> = [
+  // "Invalid user admin from 10.0.0.1 port 22 ssh2", "Failed password for root",
+  // "Accepted publickey ...", "sudo: user : command not allowed"
+  [/sshd\[\d+\]|sshd:|Invalid user|Failed password|Accepted (password|publickey|keyboard)|sudo:|pam_unix|authentication failure/i, 'AUTH'],
+  // "Dec 10 06:55:46 server01 cron[1060]: ..." — BSD syslog prefix
+  [/^\s*[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\S+:\s?/, 'SYSLOG'],
+  // Docker json-file driver: {"log":"...","stream":"stdout","time":"..."}
+  // or k8s json logs {"log":"...","time":"..."}
+  [/^\s*\{"log".*"stream"/, 'DOCKER'],
+  // Nginx/Apache access log: IP - - [dd/Mon/yyyy:hh:mm:ss +zzzz] "METHOD url HTTP/1.1" ...
+  [/(\d{1,3}\.){3}\d{1,3}.*\[\d{2}\/[A-Za-z]{3}\/\d{4}(:\d{2}){3}\s[^\]]+\]\s+"(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)/, 'NGINX'],
+  // Raw HTTP request line without client prefix: GET /index.html HTTP/1.1
+  [/^"(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\S+\s+HTTP\/[12]/, 'NGINX'],
+  // Raw HTTP request line (unquoted)
+  [/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+\/\S*\s+HTTP\/[12]/, 'NGINX'],
+  // Windows / Sysmon / Event Viewer style
+  [/powershell\.exe|EventID|Event ID|Microsoft-Windows|Sysmon|Process Create|Image:\s+\\\\?\.?|CommandLine:/i, 'APP'],
+  // ISO-timestamped level-prefixed app logs: "2026-08-02T03:35:05.123Z ERROR ..."
+  [/^\s*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([.,]\d{1,6})?(Z|[+-]\d{2}:?\d{2})?\s+(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\b/, 'APP'],
+  // Generic timestamp + level: "[2026-08-02 03:35:05] ERROR ..." or "03:35:05 INFO ..."
+  [/^\s*[\[]?\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2}[^\]]*[\]]?\s+(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL)\b/, 'APP'],
+  // JSON blobs (remaining) — almost always application logs
+  [/^\s*\{.*\}\s*$/, 'APP'],
+];
+
+export function detectLogFormatLocally(logContent: string): LogFormatValue {
+  const tally = new Map<LogFormatValue, number>();
+  let classified = 0;
+
+  const lines = logContent.split('\n');
+  // Cap the scan so multi-MB pastes stay fast; order is representative enough.
+  const MAX_LINES = 2000;
+  for (let i = 0; i < lines.length && i < MAX_LINES; i++) {
+    const line = lines[i];
+    // Strip CR and trim — pasted Windows logs carry \r\n
+    const trimmed = line.replace(/\r$/, '').trim();
+    if (trimmed.length < 8) continue; // blank / divider lines carry no signal
+
+    for (const [pattern, format] of LINE_CLASSIFIERS) {
+      if (pattern.test(trimmed)) {
+        tally.set(format, (tally.get(format) ?? 0) + 1);
+        classified++;
+        break;
+      }
+    }
+  }
+
+  if (classified === 0) return 'UNKNOWN';
+
+  let winner: LogFormatValue = 'UNKNOWN';
+  let winnerVotes = 0;
+  for (const [format, votes] of tally) {
+    if (votes > winnerVotes) {
+      winner = format;
+      winnerVotes = votes;
+    }
+  }
+
+  // Require a strict majority so a genuinely mixed paste (the exact case that
+  // made the AI give up) doesn't get a misleading single-format label from a
+  // 1-vote plurality. Below the threshold the honest answer stays UNKNOWN.
+  return winnerVotes / classified > 0.5 ? winner : 'UNKNOWN';
+}
+
+/**
+ * Chooses the final log format: trust the AI's normalised verdict when the
+ * local detector is undecided or agrees; take the local verdict when the AI
+ * punted (UNKNOWN) but the evidence has a strict majority. Local never
+ * overrides an AI non-UNKNOWN verdict it disagrees with — the model sees
+ * semantic context the regexes don't.
+ */
+export function resolveFinalLogFormat(aiFormat: LogFormatValue, logContent: string): LogFormatValue {
+  const local = detectLogFormatLocally(logContent);
+  if (local === 'UNKNOWN') return aiFormat;
+  if (aiFormat === 'UNKNOWN') return local;
+  return aiFormat;
+}
+
 export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
   const sanitized = sanitizeLogInput(logContent);
 
@@ -123,9 +215,33 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
 
   try {
     const provider = getAIProvider();
+
+    // Cap the log excerpt to fit the provider's per-request budget. Prioritize
+    // keeping the tail (recent events) over the head — analysts care most
+    // about what happened last, and cutting from the end hides the attack.
+    //
+    // Chars-per-token: prose averages 4, but log lines (dense URLs, hex ids,
+    // IPs, timestamps, percent-encoding) tokenize much tighter. Measured at
+    // ~2.4 chars/token on representative access+auth+sysmon logs, so use 2.2
+    // with safety margin. A 52k-char nginx paste was the motivating
+    // regression: at 4/token we sent ~13k tokens to Groq's 12k TPM tier and
+    // got HTTP 413.
+    const CHARS_PER_TOKEN = 2.2;
+    const maxChars = provider.maxInputTokens
+      ? Math.floor(provider.maxInputTokens * CHARS_PER_TOKEN)
+      : 120000;
+    const excerpt =
+      sanitized.length <= maxChars
+        ? sanitized
+        : [
+            `[Log truncated to ${maxChars} chars (~${provider.maxInputTokens} token budget). ` +
+              'Showing the most recent events; earlier lines omitted.]',
+            sanitized.slice(-maxChars),
+          ].join('\n');
+
     const text = await provider.complete({
       system: SYSTEM_PROMPT,
-      user: `Analyze this log data:\n\n${sanitized.substring(0, 120000)}`,
+      user: `Analyze this log data:\n\n${excerpt}`,
       maxTokens: 4096,
     });
 
