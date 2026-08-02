@@ -138,13 +138,11 @@ export async function POST(
   } catch (error: unknown) {
     const message = getErrorMessage(error);
     logger.error('Analysis failed', { error: message, sessionId: request.nextUrl.pathname });
-    // Analyzer throws on configuration errors (bad key, retired model) —
-    // pass those messages through so the analyst sees a real signal
-    // instead of a generic "Analysis failed" toast.
-    const isConfigError =
-      /authentication|ANTHROPIC_API_KEY|model unavailable|retired/i.test(message);
+    // Analyzer now throws on ALL failure paths with a rich message that names
+    // the provider, status, and reason. Pass the whole thing through — the
+    // analyst always needs to see the actual diagnosis to fix it.
     return NextResponse.json(
-      { data: null, error: isConfigError ? message : 'Analysis failed', status: 500 },
+      { data: null, error: message, status: 500 },
       { status: 500 },
     );
   }
