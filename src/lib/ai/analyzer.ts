@@ -133,7 +133,9 @@ const LINE_CLASSIFIERS: Array<[RegExp, LogFormatValue]> = [
   // "Accepted publickey ...", "sudo: user : command not allowed"
   [/sshd\[\d+\]|sshd:|Invalid user|Failed password|Accepted (password|publickey|keyboard)|sudo:|pam_unix|authentication failure/i, 'AUTH'],
   // "Dec 10 06:55:46 server01 cron[1060]: ..." — BSD syslog prefix
-  [/^\s*[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\S+:\s?/, 'SYSLOG'],
+  // hostname token must NOT consume the trailing colon, else \S+ eats the whole
+  // "proc[pid]:" token and the outer `:` finds nothing to match.
+  [/^\s*[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+[^\s:]+\s+\S+:\s?/, 'SYSLOG'],
   // Docker json-file driver: {"log":"...","stream":"stdout","time":"..."}
   // or k8s json logs {"log":"...","time":"..."}
   [/^\s*\{"log".*"stream"/, 'DOCKER'],
