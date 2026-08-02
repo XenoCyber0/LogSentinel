@@ -66,7 +66,13 @@ Analyze the provided log and return ONLY valid JSON matching this exact schema:
 }
 
 IMPORTANT: For "logFormat" return exactly one of these values (no others, no descriptions):
-APACHE | NGINX | SYSLOG | AWS_CLOUDTRAIL | GCP_AUDIT | AZURE_ACTIVITY | KUBERNETES | DOCKER | JSON | CUSTOM | UNKNOWN
+NGINX | AUTH | SYSLOG | DOCKER | APP | UNKNOWN
+- AUTH: Linux auth.log / sshd / PAM (login attempts, sudo, authentication)
+- SYSLOG: Generic Unix syslog
+- DOCKER: Container logs
+- APP: Application-specific logs (web servers, applications)
+- NGINX: Nginx access logs (Apache too)
+- UNKNOWN: anything else or unrecognizable
 If the log mixes multiple formats, return the dominant one. If unsure, return UNKNOWN.`;
 
 // ---------------------------------------------------------------------------
@@ -82,30 +88,19 @@ function normaliseSeverity(input: unknown): AnalysisResult['severity'] {
   return hit ?? 'UNKNOWN';
 }
 
-const LOG_FORMAT_VALUES = [
-  'APACHE',
-  'NGINX',
-  'SYSLOG',
-  'AWS_CLOUDTRAIL',
-  'GCP_AUDIT',
-  'AZURE_ACTIVITY',
-  'KUBERNETES',
-  'DOCKER',
-  'JSON',
-  'CUSTOM',
-] as const;
+const LOG_FORMAT_VALUES = ['NGINX', 'AUTH', 'SYSLOG', 'DOCKER', 'APP', 'UNKNOWN'] as const;
 type LogFormatValue = (typeof LOG_FORMAT_VALUES)[number];
 
 const LOG_FORMAT_HINTS: Array<[RegExp, LogFormatValue]> = [
-  [/apache/i, 'APACHE'],
-  [/nginx/i, 'NGINX'],
-  [/syslog|rsyslog|syslogd|auth\.log/i, 'SYSLOG'],
-  [/cloudtrail|aws/i, 'AWS_CLOUDTRAIL'],
-  [/gcp|google|stackdriver/i, 'GCP_AUDIT'],
-  [/azure/i, 'AZURE_ACTIVITY'],
-  [/kube/i, 'KUBERNETES'],
-  [/docker|container/i, 'DOCKER'],
-  [/json/i, 'JSON'],
+  // AUTH: Linux authentication (sshd, PAM, sudo — high-signal security logs)
+  [/auth\.log|sshd|pam|sudo|authentication|login\s+attempt/i, 'AUTH'],
+  // NGX: web-server access logs (Apache common/combined maps here too)
+  [/apache|nginx|access\.log|httpd/i, 'NGINX'],
+  // SYSLOG: general Unix syslog
+  [/syslog|rsyslog|syslogd/i, 'SYSLOG'],
+  [/docker|container|k8s|kubernetes/i, 'DOCKER'],
+  // JSON-formatted or application-specific logs default to APP
+  [/json|application|app\.log|windows|sysmon|event\s+id/i, 'APP'],
 ];
 
 function normaliseLogFormat(input: unknown): LogFormatValue {
@@ -116,7 +111,7 @@ function normaliseLogFormat(input: unknown): LogFormatValue {
   for (const [pattern, value] of LOG_FORMAT_HINTS) {
     if (pattern.test(str)) return value;
   }
-  return 'CUSTOM'; // safe fallback — never UNKNOWN (custom is more informative)
+  return 'UNKNOWN'; // last-resort — the schema only allows the 6 values above
 }
 
 export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
