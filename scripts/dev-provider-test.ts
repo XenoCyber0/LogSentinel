@@ -13,7 +13,7 @@
  *   $env:OPENAI_COMPATIBLE_MODEL='meta-llama/llama-3.3-70b-instruct:free'
  *   npx tsx --env-file=.env scripts/dev-provider-test.ts
  */
-import { analyzeLog } from '../src/lib/ai/analyzer';
+import { analyzeLog, detectLogFormatLocally } from '../src/lib/ai/analyzer';
 import { getAIProvider } from '../src/lib/ai/provider';
 import { env } from '../src/env';
 
@@ -60,6 +60,10 @@ async function main() {
     if (err.status === 404) console.log('   → Model name wrong. Check provider docs; OpenRouter requires the :free suffix.');
     if (err.status === 413) console.log('   → Input too large even after cap. Lower AI_MAX_INPUT_TOKENS in .env (try 4000).');
     if (err.status === 429) console.log('   → Rate limited — free-tier model is at its shared pool. Switch to a less popular :free model, add your own BYOK key, or retry off-peak.');
+    if (err.status === undefined && /Invalid analysis structure/i.test(err.message ?? '')) {
+      console.log('   → Provider returned junk/malformed response instead of the required JSON schema.');
+      console.log('     Solution: Use a free tier model that supports structured outputs / JSON mode properly.');
+    }
     if (err.status === undefined) console.log('   → Transient / network / parse error (not auth/rate-limit).');
     process.exit(1);
   }
