@@ -59,7 +59,7 @@ async function main() {
     if (err.status === 401) console.log('   → Key rejected. Rotate and update .env (or env var above).');
     if (err.status === 404) console.log('   → Model name wrong. Check provider docs; OpenRouter requires the :free suffix.');
     if (err.status === 413) console.log('   → Input too large even after cap. Lower AI_MAX_INPUT_TOKENS in .env (try 4000).');
-    if (err.status === 429) console.log('   → Rate-limited. Free tier throttling; wait a minute or switch models.');
+    if (err.status === 429) console.log('   → Rate limited — free-tier model is at its shared pool. Switch to a less popular :free model, add your own BYOK key, or retry off-peak.');
     if (err.status === undefined) console.log('   → Transient / network / parse error (not auth/rate-limit).');
     process.exit(1);
   }
