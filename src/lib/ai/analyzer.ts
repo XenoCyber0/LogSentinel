@@ -429,9 +429,17 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
       status === 404 ||
       (status === 400 && /model|invalid/i.test(msg)) || // OpenRouter 400 for bad model IDs
       /model.*not found|not a valid model|retired|unavailable|does not exist/i.test(msg);
+    // Groq (and some other providers) return HTTP 403 with a Cloudflare-style
+    // "Access denied. Check your network settings." body when the source IP is
+    // on a denylist (VPN, datacenter, geofenced region). That's not "the model
+    // is broken" and not a transient hiccup — retrying won't help and the
+    // analyst needs to change network or provider. Classify as config so the
+    // caller surfaces the operator-fixable message instead of "try later."
+    const isIpBlocked =
+      status === 403 && /access denied|network settings|cloudflare|forbidden/i.test(msg);
     // Missing env-var errors from getAIProvider() arrive as AIProviderError w/o status
     const isMisconfigured = error instanceof AIProviderError && status === undefined;
-    const isConfigError = isAuthError || isModelError || isMisconfigured;
+    const isConfigError = isAuthError || isModelError || isMisconfigured || isIpBlocked;
 
     logger.error('Log analysis failed', {
       error: msg,
@@ -448,11 +456,16 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
       throw new Error(
         isMisconfigured
           ? msg // pass the env-var guidance straight through
-          : isAuthError
-            ? 'AI provider authentication failed. Check the API key in your server environment ' +
-                `(AI_PROVIDER=${process.env.AI_PROVIDER ?? 'anthropic'}).`
-            : 'AI provider model unavailable. The configured model may be retired or renamed — ' +
-                'check OPENAI_COMPATIBLE_MODEL or lib/ai/provider.ts.',
+          : isIpBlocked
+            ? 'AI provider rejected the request from this server IP (HTTP 403 — likely VPN, ' +
+                'datacenter egress, or geofencing). This is an OPERATOR issue, not an app bug. ' +
+                'Either disable VPN/proxy, deploy from a residential/clean IP, or switch ' +
+                'OPENAI_COMPATIBLE_BASE_URL to a provider that serves your region (e.g. OpenRouter).'
+            : isAuthError
+              ? 'AI provider authentication failed. Check the API key in your server environment ' +
+                  `(AI_PROVIDER=${process.env.AI_PROVIDER ?? 'anthropic'}).`
+              : 'AI provider model unavailable. The configured model may be retired or renamed — ' +
+                  'check OPENAI_COMPATIBLE_MODEL or lib/ai/provider.ts.',
       );
     }
 
