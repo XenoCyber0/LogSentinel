@@ -13,7 +13,7 @@
  *   $env:OPENAI_COMPATIBLE_MODEL='meta-llama/llama-3.3-70b-instruct:free'
  *   npx tsx --env-file=.env scripts/dev-provider-test.ts
  */
-import { analyzeLog, detectLogFormatLocally } from '../src/lib/ai/analyzer';
+import { analyzeLog } from '../src/lib/ai/analyzer';
 import { getAIProvider } from '../src/lib/ai/provider';
 import { env } from '../src/env';
 

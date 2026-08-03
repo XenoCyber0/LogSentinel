@@ -65,10 +65,22 @@ export default function NewSessionPage() {
       });
 
       const sessionId = res.data.data.session.id;
-      toast.success('Session created. Starting AI analysis...');
 
-      // Trigger analysis immediately
-      await apiClient.post(`/sessions/${sessionId}/analyze`, {});
+      // Trigger analysis immediately. If THIS fails we still have a usable
+      // session in the DB — push the analyst to the session page (where they
+      // can click Re-analyze) instead of stranding them on /new with a toast.
+      // The previous behaviour dropped the navigation entirely on analyze
+      // failure, losing the freshly-created session id from the user's view.
+      try {
+        toast.success('Session created. Starting AI analysis...');
+        await apiClient.post(`/sessions/${sessionId}/analyze`, {});
+      } catch (analyzeErr: unknown) {
+        const analyzeMsg =
+          analyzeErr instanceof AxiosError
+            ? (analyzeErr.response?.data?.error as string) || 'Analysis failed'
+            : 'Analysis failed';
+        toast.error(`Session created, but analysis failed: ${analyzeMsg}`);
+      }
 
       router.push(`/dashboard/sessions/${sessionId}`);
     } catch (error: unknown) {

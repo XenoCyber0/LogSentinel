@@ -7,7 +7,7 @@ Enterprise-grade AI-powered log analysis for security analysts. Upload raw log f
 - **Framework:** Next.js 16 (App Router) + React 19 + TypeScript
 - **Database:** PostgreSQL 16 via Prisma 7 (pg adapter)
 - **Auth:** RS256 JWT access tokens (15 min, in-memory) + rotating httpOnly refresh-token cookies (30 days) with family-reuse detection
-- **AI:** Anthropic Claude (`claude-3-5-sonnet`) with prompt-injection sanitization
+- **AI:** Anthropic Claude, OpenRouter (free tier), Groq, or any OpenAI-compatible endpoint — selectable via `AI_PROVIDER`
 - **State:** Zustand (auth) + TanStack Query (server state) + React Hook Form
 - **UI:** Tailwind CSS 4 + Radix UI + Recharts + sonner
 
@@ -54,8 +54,11 @@ See [`.env.example`](.env.example) for the full annotated list. Required:
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` | RSA keypair (PKCS#8 / SPKI PEM, newlines escaped as `\n`) |
-| `ANTHROPIC_API_KEY` | Claude API key (`sk-ant-...`) |
-| `UPSTASH_REDIS_REST_URL` / `..._TOKEN` | Distributed rate limiting |
+| `AI_PROVIDER` | `anthropic` (paid) or `openai-compatible` (free tiers via OpenRouter / Groq / Ollama / …) |
+| `ANTHROPIC_API_KEY` | Only when `AI_PROVIDER=anthropic` |
+| `OPENAI_COMPATIBLE_API_KEY` / `_BASE_URL` / `_MODEL` | Only when `AI_PROVIDER=openai-compatible`. Defaults: OpenRouter base, Llama 3.3 70B free. |
+| `AI_MAX_INPUT_TOKENS` | Per-request token cap (default 6000 — Groq free-tier safe) |
+| `UPSTASH_REDIS_REST_URL` / `..._TOKEN` | Distributed rate limiting (fail-open if placeholders) |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Storage (optional at runtime) |
 | `NEXT_PUBLIC_APP_URL` | App origin (JWT issuer/audience) |
 
@@ -90,7 +93,7 @@ src/
 │       ├── sessions/             # CRUD + /:id/analyze (Claude)
 │       └── alerts/
 ├── lib/
-│   ├── ai/                       # analyzer.ts (Claude) + sanitizer.ts (prompt-injection guard)
+│   ├── ai/                       # analyzer.ts (provider-agnostic) + provider.ts + sanitizer.ts
 │   ├── auth/                     # jwt.ts (RS256 sign/verify) + session.ts (refresh rotation)
 │   ├── db/prisma.ts              # Prisma client (globalThis singleton)
 │   ├── security/                 # rateLimiter.ts + getClientIp.ts

@@ -208,6 +208,109 @@ export function resolveFinalLogFormat(aiFormat: LogFormatValue, logContent: stri
   return aiFormat;
 }
 
+/**
+ * Light repair for the two defects free-tier models (esp. Groq under load)
+ * emit most often in otherwise-valid JSON:
+ *   1. trailing commas before a closing `]`/`}`   ("a", "b", ] / {.., })
+ *   2. raw unescaped newlines inside string values ("line1\nline2" with a
+ *      literal \n instead of \\n)
+ * Anything else is left for JSON.parse to reject — this is NOT a JSON5 parser
+ * and must not paper over structural corruption that would produce a
+ * misleading analysis.
+ */
+function repairCommonJsonDefects(s: string): string {
+  // (1) drop a comma directly followed by ] or } (allowing whitespace between)
+  const out = s.replace(/,\s*([}\]])/g, '$1');
+  // (2) escape literal CR/LF only when they occur inside a string literal.
+  // Walk char-wise reusing the same string-detection the extractor uses.
+  let inString = false;
+  let escape = false;
+  let repaired = '';
+  for (let i = 0; i < out.length; i++) {
+    const ch = out[i];
+    if (escape) {
+      repaired += ch;
+      escape = false;
+      continue;
+    }
+    if (ch === '\\') {
+      repaired += ch;
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      repaired += ch;
+      continue;
+    }
+    if (inString && ch === '\n') {
+      repaired += '\\n';
+      continue;
+    }
+    if (inString && ch === '\r') {
+      repaired += '\\r';
+      continue;
+    }
+    repaired += ch;
+  }
+  return repaired;
+}
+
+/**
+ * Extract the first balanced top-level {...} object from a model response.
+ * Weaker models add prose before/after ("Here's the analysis: ...") so we
+ * scan structurally instead of trusting the wrapping. Braces inside string
+ * literals don't count toward depth. Returns the raw slice, or null if no
+ * balanced object was found.
+ */
+export function extractFirstJsonObject(cleaned: string): string | null {
+  const start = cleaned.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < cleaned.length; i++) {
+    const ch = cleaned[i];
+    if (escape) {
+      escape = false;
+    } else if (ch === '\\') {
+      escape = true;
+    } else if (ch === '"') {
+      inString = !inString;
+    } else if (!inString) {
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          return cleaned.slice(start, i + 1);
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Parse the model's JSON out of `text`, tolerating code fences, wraparound
+ * prose, trailing commas, and raw newlines in strings. Throws SyntaxError
+ * (same type as JSON.parse) when the extracted slice is still unparsable so
+ * callers can catch one predictable class.
+ */
+export function parseAnalysisJson(text: string): unknown {
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
+  const slice = extractFirstJsonObject(cleaned);
+  if (slice === null) {
+    throw new Error(`No JSON object found in AI response. First 200 chars: ${cleaned.slice(0, 200)}`);
+  }
+  try {
+    return JSON.parse(slice);
+  } catch (firstErr) {
+    const repaired = repairCommonJsonDefects(slice);
+    if (repaired === slice) throw firstErr; // nothing repairable — surface original
+    return JSON.parse(repaired); // throws SyntaxError with the post-repair offset
+  }
+}
+
 export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
   const sanitized = sanitizeLogInput(logContent);
 
@@ -241,52 +344,51 @@ export async function analyzeLog(logContent: string): Promise<AnalysisResult> {
             sanitized.slice(-maxChars),
           ].join('\n');
 
-    const text = await provider.complete({
-      system: SYSTEM_PROMPT,
-      user: `Analyze this log data:\n\n${excerpt}`,
-      maxTokens: 4096,
-    });
+    const userPrompt = `Analyze this log data:\n\n${excerpt}`;
 
-    // Extract JSON from response. Weaker models often add prose before/after
-    // the JSON blob ("Here's the analysis: ...", "Let me know if..."). Find
-    // the JSON structurally by brace matching instead of trusting the wrapping.
-    const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
-
-    // Find the first '{', then scan for its matching '}'. Strings count toward
-    // depth only when outside a string literal so braces inside "msg" don't
-    // throw us off.
-    const start = cleaned.indexOf('{');
-    let end = -1;
-    if (start >= 0) {
-      let depth = 0;
-      let inString = false;
-      let escape = false;
-      for (let i = start; i < cleaned.length; i++) {
-        const ch = cleaned[i];
-        if (escape) {
-          escape = false;
-        } else if (ch === '\\') {
-          escape = true;
-        } else if (ch === '"') {
-          inString = !inString;
-        } else if (!inString) {
-          if (ch === '{') depth++;
-          else if (ch === '}') {
-            depth--;
-            if (depth === 0) {
-              end = i + 1;
-              break;
-            }
-          }
+    // Free-tier providers (Groq esp.) intermittently emit syntactically broken
+    // JSON — unclosed strings, trailing commas, raw newlines in evidence[]. We
+    // repair the common cases in parseAnalysisJson; for anything still broken,
+    // retry ONCE with temperature 0 and an explicit "raw JSON only" nudge. The
+    // retry is bounded and only fires on SyntaxError from JSON.parse — config,
+    // auth, rate-limit, and HTTP errors never reach this path (they throw
+    // AIProviderError from provider.complete below and skip the retry).
+    let parsed: AnalysisResult;
+    try {
+      const text = await provider.complete({ system: SYSTEM_PROMPT, user: userPrompt, maxTokens: 4096 });
+      try {
+        parsed = parseAnalysisJson(text) as AnalysisResult;
+      } catch (parseErr) {
+        logger.warn('AI returned malformed JSON; retrying once at temperature 0', {
+          error: parseErr instanceof Error ? parseErr.message : String(parseErr),
+          snippet: text.slice(0, 300),
+        });
+        const retryText = await provider.complete({
+          system: SYSTEM_PROMPT + '\n\nReturn ONLY raw JSON. No prose, no code fences, no preamble.',
+          user: userPrompt,
+          maxTokens: 4096,
+        });
+        try {
+          parsed = parseAnalysisJson(retryText) as AnalysisResult;
+        } catch (retryErr) {
+          logger.error('AI returned malformed JSON twice — giving up', {
+            firstError: parseErr instanceof Error ? parseErr.message : String(parseErr),
+            secondError: retryErr instanceof Error ? retryErr.message : String(retryErr),
+            firstSnippet: text.slice(0, 300),
+            secondSnippet: retryText.slice(0, 300),
+          });
+          throw retryErr; // fall out to the outer catch which formats the operator-facing message
         }
       }
+    } catch (err) {
+      // Re-throw AIProviderError untouched so the outer catch classifies it
+      // (auth / model / config / rate-limit). But parse errors thrown from the
+      // retry path land here too — wrap them so the outer catch sees a
+      // contextual "analysis failed" message instead of a bare SyntaxError.
+      if (err instanceof AIProviderError) throw err;
+      const m = err instanceof Error ? err.message : String(err);
+      throw new Error(`Failed to parse AI response as JSON after repair+retry: ${m}`);
     }
-
-    if (start < 0 || end < 0) {
-      throw new Error(`No JSON object found in AI response. First 200 chars: ${cleaned.slice(0, 200)}`);
-    }
-
-    const parsed = JSON.parse(cleaned.slice(start, end)) as AnalysisResult;
 
     // Validate result structure
     if (!parsed.summary || !parsed.severity || !Array.isArray(parsed.threats)) {
