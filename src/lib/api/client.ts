@@ -51,17 +51,17 @@ apiClient.interceptors.response.use(
     const original = error.config as InternalAxiosRequestConfig & { _retried?: boolean };
     if (
       error.response?.status === 401 &&
-      original &&
-      !original._retried &&
-      !original.url?.includes('/auth/')
+      !original?._retried &&
+      original?.url !== '/auth/refresh'
     ) {
+      original._retried = true;
       const newToken = await refreshAccessToken();
       if (newToken) {
-        original._retried = true;
-        original.headers.set('Authorization', `Bearer ${newToken}`);
-        return apiClient.request(original);
+        original.headers = original.headers ?? {};
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient(original);
       }
     }
     return Promise.reject(error);
-  }
+  },
 );

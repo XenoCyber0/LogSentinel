@@ -4,31 +4,56 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { Topbar } from '@/components/layout/Topbar';
 import { useAuthStore } from '@/stores/authStore';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
+
+// Server snapshots. Module-level constants so useSyncExternalStore's
+// getServerSnapshot returns a stable reference across renders.
+const SERVER_HYDRATED = false;
+const SERVER_AUTH = false;
+
+const noopSubscribe = () => () => {};
+
+// Referenced by useHasHydrated/useIsAuthenticated below. Keeping it here
+// (rather than null-returning subscribers inline) makes it greppable if we
+// ever need to swap the store implementation.
+void noopSubscribe;
 
 /**
- * Tracks whether zustand/persist has finished reading localStorage on the
- * client. Until it has, `isAuthenticated` shows the in-memory default
- * (false) even when a real auth snapshot exists in storage. Gating the
- * redirect + render on this prevents the "logged-in dashboard renders for
- * ~1s, then bounces to /login" race.
+ * Whether zustand/persist has finished reading localStorage on the client.
  *
- * Subscribes to `persist.onFinishHydration` so the flag flips
- * reactivley — a plain `useEffect(() => setHydrated(true))` would also
- * work but runs *after* first paint, which lets a forbidden-route
- * `router.push('/login')` slip through before we get a chance to stop it.
+ * useSyncExternalStore is the right primitive here because:
+ *  - Dashboard pages are statically prerendered (○ in the build output), so
+ *    this hook runs on the SERVER where zustand-v5 persist never attaches
+ *    `.persist` — a plain `useAuthStore.persist.hasHydrated()` in a useState
+ *    initializer crashed prerender with "Cannot read properties of undefined".
+ *    getServerSnapshot handles that path cleanly.
+ *  - It avoids the "setState synchronously in effect" lint error the earlier
+ *    useState+useEffect version triggered.
+ *  - No hydration mismatch: server HTML shows the spinner (false), first
+ *    client render also returns false, then flips true when persist's
+ *    hydration subscription fires.
  */
 function useHasHydrated() {
-  const [hydrated, setHydrated] = useState(() => useAuthStore.persist.hasHydrated());
+  return useSyncExternalStore(
+    (onStoreChange) => useAuthStore.persist.onFinishHydration(onStoreChange),
+    () => useAuthStore.persist.hasHydrated(),
+    () => SERVER_HYDRATED
+  );
+}
 
-  useEffect(() => {
-    // useState's lazy initializer above already handled the case where
-    // hydration finished before first render; this subscription catches
-    // the case where it finishes AFTER first render.
-    return useAuthStore.persist.onFinishHydration(() => setHydrated(true));
-  }, []);
-
-  return hydrated;
+/**
+ * isAuthenticated read through the same server-aware lens. Direct
+ * `useAuthStore()` subscription would return the in-memory default (false)
+ * on the server AND on first client render — which is what we want — but
+ * going through useSyncExternalStore keeps the two values consistent within
+ * a single render pass and makes the server boundary explicit.
+ */
+function useIsAuthenticated() {
+  return useSyncExternalStore(
+    (onStoreChange) => useAuthStore.subscribe(onStoreChange),
+    () => useAuthStore.getState().isAuthenticated,
+    () => SERVER_AUTH
+  );
 }
 
 export default function DashboardLayout({
@@ -36,11 +61,15 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated } = useAuthStore();
+  const isAuthenticated = useIsAuthenticated();
   const hasHydrated = useHasHydrated();
   const router = useRouter();
 
   useEffect(() => {
+    // Only trust isAuthenticated once persist has merged localStorage into
+    // state. Before that it shows the in-memory default (false) even when a
+    // valid auth snapshot exists in storage — which is exactly the
+    // "dashboard renders for ~1s, then bounces to /login" race being fixed.
     if (hasHydrated && !isAuthenticated) {
       router.push('/login');
     }

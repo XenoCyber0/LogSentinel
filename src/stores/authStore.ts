@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
 import { User } from '@/types/auth';
 
 interface AuthState {
@@ -71,29 +71,19 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
-      // Use a no-op SSR-safe storage so persist doesn't crash on the
-      // server during initial render. The browser's localStorage is
-      // picked up automatically on the client.
-      storage: createJSONStorage(() =>
-        typeof window !== 'undefined' ? localStorage : (undefined as unknown as Storage)
-      ),
-      // Custom merge: the persisted snapshot intentionally omits accessToken
-      // (security — keep the bearer token out of localStorage), but Zustand's
-      // default shallow merge `{...initialState, ...persisted}` would then
-      // OVERWRITE any live accessToken back to null on every rehydration
-      // (storage event, tab focus, hot-reload). That manifested as
-      // "everything works for ~1 second, then I get logged out" because the
-      // next API call after a rehydration found accessToken === null and
-      // 401'd. Preserving current accessToken fixes that.
-      merge: (persistedState, currentState) => {
-        const persisted = (persistedState ?? {}) as Partial<AuthState>;
-        return {
-          ...currentState,
-          user: persisted.user ?? currentState.user,
-          isAuthenticated: persisted.isAuthenticated ?? currentState.isAuthenticated,
-          // deliberately do NOT touch accessToken — keep whatever's in memory
-        };
-      },
+      // No custom storage, no custom merge. The defaults handle both:
+      //   - storage:  localStorage when window exists, no-op gracefully on the server
+      //   - merge:    shallow-merges persistedSnapshot into currentState, which is
+      //               correct because partialize has already dropped accessToken
+      //               from the snapshot — there's nothing to overwrite. The current
+      //               in-memory accessToken survives untouched.
+      //
+      // (An earlier version supplied a createJSONStorage factory that returned
+      // `undefined as unknown as Storage` on the server. Zustand then immediately
+      // called onFinishHydration on the client without ever reading localStorage,
+      // which is why `hasHydrated: true / isAuthenticated: false` showed up first
+      // in the Layout diagnostic, followed *later* by the real rehydrated state.
+      // Removing the buggy factory fixes the early "hydration done" signal.)
     }
   )
 );
