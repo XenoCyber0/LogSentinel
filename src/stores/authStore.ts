@@ -77,17 +77,23 @@ export const useAuthStore = create<AuthState>()(
       storage: createJSONStorage(() =>
         typeof window !== 'undefined' ? localStorage : (undefined as unknown as Storage)
       ),
-      // Do NOT skipHydration. With skipHydration:true the store stays at its
-      // initial state ({isAuthenticated:false}) until *something* calls
-      // rehydrate() manually — nothing did — so on every hard reload the
-      // store said "logged out" even though the httpOnly refresh cookie was
-      // still valid. AuthHydrator's hydrate() then early-returned on
-      // !isAuthenticated and never called /api/auth/refresh. Result: users
-      // were bounced to /login on every page reload.
-      //
-      // Default synchronous hydration from localStorage is safe here because
-      // the persisted fields are non-sensitive (no token) and the storage
-      // factory already returns a no-op Storage on the server.
+      // Custom merge: the persisted snapshot intentionally omits accessToken
+      // (security — keep the bearer token out of localStorage), but Zustand's
+      // default shallow merge `{...initialState, ...persisted}` would then
+      // OVERWRITE any live accessToken back to null on every rehydration
+      // (storage event, tab focus, hot-reload). That manifested as
+      // "everything works for ~1 second, then I get logged out" because the
+      // next API call after a rehydration found accessToken === null and
+      // 401'd. Preserving current accessToken fixes that.
+      merge: (persistedState, currentState) => {
+        const persisted = (persistedState ?? {}) as Partial<AuthState>;
+        return {
+          ...currentState,
+          user: persisted.user ?? currentState.user,
+          isAuthenticated: persisted.isAuthenticated ?? currentState.isAuthenticated,
+          // deliberately do NOT touch accessToken — keep whatever's in memory
+        };
+      },
     }
   )
 );
