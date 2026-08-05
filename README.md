@@ -23,7 +23,7 @@ Drop in raw logs — **nginx, auth.log, syslog, Windows Event, JSON, Apache** �
 Security teams can't paste production logs into someone else's cloud. LogSentinel gives you an analyst-grade workbench without surrendering your data:
 
 - 🔒 **Local-first** — no SaaS, no third-party accounts, no telemetry
-- 🔑 **Bring your own key** — free tiers on OpenRouter / Groq / Cerebras / Google AI Studio / Mistral / NVIDIA / Hugging Face / Cohere / Cloudflare Workers AI work out of the box
+- 🔑 **Bring your own key** — 13+ genuinely free providers with free tiers (OpenRouter, Groq, Zhipu GLM, Cerebras, Mistral, Gemini, NIM, HF Inference, Cohere, Cloudflare Workers AI, Together, Fireworks, DeepInfra, Baseten) plus 4 aggregator gateways. Free tiers on the rest often skip the credit card too.
 - 🌐 **Pluggable AI backend** — swap providers by changing 3 env vars
 - 🧱 **Production-hardened** — prompt-injection defense, XSS-safe rendering, rate limiting, token family-reuse detection
 - 🐳 **One command to run** — `npm run dev` or `docker compose up`
@@ -115,28 +115,46 @@ LogSentinel treats the LLM as a black box behind an OpenAI-compatible endpoint. 
 
 | Provider | `OPENAI_COMPATIBLE_BASE_URL` | Notes |
 |---|---|---|
-| **OpenRouter** *(recommended free)* | `https://openrouter.ai/api/v1` | 50 req/day free per model |
-| **Groq** | `https://api.groq.com/openai/v1` | Fast, generous free TPM. Aggressive IP-blocklist — don't run under VPN. |
-| **Cerebras** | `https://api.cerebras.ai/v1` | Fastest inference available |
-| **Google AI Studio** (Gemini) | `https://generativelanguage.googleapis.com/v1beta/openai/` | Free tier with daily caps on Gemini Flash models |
-| **Mistral AI** | `https://api.mistral.ai/v1` | Free "experiment" tier with rate limits |
-| **NVIDIA NIM** | `https://integrate.api.nvidia.com/v1` | Free credits on signup; huge model catalog (Llama, Nemotron, DeepSeek…) |
-| **Hugging Face Inference** | `https://router.huggingface.co/v1` | Small free monthly credit; thousands of community models |
-| **Cohere** | `https://api.cohere.com/compatibility/v1` | Free trial tier — use Command family models |
-| **Cloudflare Workers AI** | `https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/v1` | Free daily neuron allocation per account; model names like `@cf/meta/llama-3.1-8b-instruct` |
-| **Ollama** *(local)* | `http://localhost:11434/v1` | Fully offline |
-| **Together** | `https://api.together.xyz/v1` | Free credit on signup |
-| **Fireworks** | `https://api.fireworks.ai/inference/v1` | Free credit on signup |
-| **Anthropic** *(paid, native)* | — | Set `AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` instead |
+| **OpenRouter** *(recommended free)* | `https://openrouter.ai/api/v1` | 13+ models under `:free` tag. 50 req/day no-credit → 1,000 req/day with one-time $10 credit. |
+| **Groq** | `https://api.groq.com/openai/v1` | Very generous free tier. 12k TPM, ~1M TPD on llama-3.3-70b-versatile. Aggressive IP-blocklist — don't run under VPN. |
+| **Cerebras** | `https://api.cerebras.ai/v1` | Fastest inference available. Free tier on public endpoint, dual-bucket rate limits. |
+| **Zhipu GLM** *(fully free)* | `https://open.bigmodel.cn/api/paas/v4/` | `glm-4.7-flash` is **unlimited-free** after signup (no CC). Chinese signup (phone). |
+| **Google AI Studio** (Gemini) | `https://generativelanguage.googleapis.com/v1beta/openai/` | Free daily quota on Gemini Flash models. |
+| **Mistral AI** | `https://api.mistral.ai/v1` | Free "experiment" tier with rate limits. |
+| **NVIDIA NIM** | `https://integrate.api.nvidia.com/v1` | Free credits on signup; huge catalog (Llama, Nemotron, DeepSeek, Kimi). |
+| **Alibaba DashScope intl** | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | Per-model free quotas on new accounts (Qwen family). |
+| **Hugging Face Inference** | `https://router.huggingface.co/v1` | Small free monthly credit; thousands of community models. |
+| **Cohere** | `https://api.cohere.com/compatibility/v1` | Free trial tier — use Command family models. |
+| **Cloudflare Workers AI** | `https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/v1` | Free daily neuron allocation; model names like `@cf/meta/llama-3.1-8b-instruct`. |
+| **Together AI** | `https://api.together.xyz/v1` | Free credit on signup; rotating free models in catalog. |
+| **Fireworks AI** | `https://api.fireworks.ai/inference/v1` | Small free credit on signup. |
+| **DeepInfra** | `https://api.deepinfra.com/v1/openai` | Small signup credit; very cheap pay-as-you-go after. |
+| **Baseten** | `https://api.baseten.co/v1` | Free signup credit (amount undisclosed until signup). |
+| **Ollama** *(local, offline)* | `http://localhost:11434/v1` | Fully offline, no API key at all. |
+| **Anthropic** *(paid, native)* | — | Set `AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` instead. |
+
+### 🔀 Aggregator gateways — one URL, front another provider
+
+Useful when you want caching, logging, or observability layered on top of any provider above:
+
+| Gateway | How to plug in | Free? |
+|---|---|---|
+| **Cloudflare AI Gateway** | `https://gateway.ai.cloudflare.com/v1/{ACCOUNT_ID}/{GATEWAY_ID}/{provider}` — proxy in front of Groq/OpenRouter/Mistral/etc., bring the upstream provider's own key | Yes, free on any CF plan |
+| **LiteLLM** *(self-host)* | `litellm --config config.yaml`, then point at `http://localhost:4000/v1`. Routes to 100+ providers from a config file. | Yes, MIT-licensed |
+| **Portkey AI** | `https://api.portkey.ai/v1` + virtual key from their dashboard | Free tier capped at 10k req/month logging |
+| **Helicone** | `https://ai-gateway.helicone.ai` | Free up to 10k req/month |
 
 ### Providers that don't fit the env-var plug
 
 Some free tiers aren't reachable as a plain `OPENAI_COMPATIBLE_BASE_URL`, so they're **not** one-line swaps here:
 
-- **Puter.js** — a *browser-side* JS library (`js.puter.com`), no API key, no server endpoint. Calls cloud LLMs from the visitor's browser. Integrating it would require a custom provider in [`src/lib/ai/provider.ts`](src/lib/ai/provider.ts), not env vars.
+- **Puter.js** — browser-side JS library (`js.puter.com`), no server endpoint. Each visitor signs in with their *own* Puter account and burns *their* free quota. Would need custom wiring in [`src/lib/ai/provider.ts`](src/lib/ai/provider.ts).
+- **ChatGPT / Claude consumer free tiers** — no API access at that tier.
 - **Hugging Face classic Inference endpoints** (`api-inference.huggingface.co`) — per-model URLs, not OpenAI-compatible. Use the Router row above instead.
-- **Cloudflare AI Gateway / LiteLLM / Portkey / OpenRouter** (as aggregator gateways) — front any provider behind a gateway after signup, then paste the gateway URL here as `OPENAI_COMPATIBLE_BASE_URL`.
-- **Make.com, n8n, other workflow tools** — they can call these same LLMs, but you'd be wiring them *around* LogSentinel rather than into it via env.
+- **DeepSeek / Moonshot Kimi / xAI** — paid-only, no free tier at all (despite how they're often marketed).
+- **Azure OpenAI / AWS Bedrock** — per-deployment URLs and regional endpoints; not a clean env-var swap.
+- **AnyAPI.ai / AionLabs** — exist but don't fit: AnyAPI is a credits reseller with thin free quota; AionLabs is a single-vendor roleplay model, not an aggregator. Skip both.
+- **GitHub Models** — retired 2026-07-30, users migrated to Azure AI Foundry.
 
 > 💡 `AI_MAX_INPUT_TOKENS=6000` (default) is calibrated for Groq's 12k TPM free tier. Raise it (e.g. `16000`) on higher-tier providers to send more context per request.
 
