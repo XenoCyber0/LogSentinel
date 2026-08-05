@@ -23,7 +23,7 @@ Drop in raw logs — **nginx, auth.log, syslog, Windows Event, JSON, Apache** �
 Security teams can't paste production logs into someone else's cloud. LogSentinel gives you an analyst-grade workbench without surrendering your data:
 
 - 🔒 **Local-first** — no SaaS, no third-party accounts, no telemetry
-- 🔑 **Bring your own key** — free tiers on OpenRouter / Groq / Cerebras work out of the box
+- 🔑 **Bring your own key** — free tiers on OpenRouter / Groq / Cerebras / Google AI Studio / Mistral / NVIDIA / Hugging Face / Cohere / Cloudflare Workers AI work out of the box
 - 🌐 **Pluggable AI backend** — swap providers by changing 3 env vars
 - 🧱 **Production-hardened** — prompt-injection defense, XSS-safe rendering, rate limiting, token family-reuse detection
 - 🐳 **One command to run** — `npm run dev` or `docker compose up`
@@ -118,8 +118,25 @@ LogSentinel treats the LLM as a black box behind an OpenAI-compatible endpoint. 
 | **OpenRouter** *(recommended free)* | `https://openrouter.ai/api/v1` | 50 req/day free per model |
 | **Groq** | `https://api.groq.com/openai/v1` | Fast, generous free TPM. Aggressive IP-blocklist — don't run under VPN. |
 | **Cerebras** | `https://api.cerebras.ai/v1` | Fastest inference available |
+| **Google AI Studio** (Gemini) | `https://generativelanguage.googleapis.com/v1beta/openai/` | Free tier with daily caps on Gemini Flash models |
+| **Mistral AI** | `https://api.mistral.ai/v1` | Free "experiment" tier with rate limits |
+| **NVIDIA NIM** | `https://integrate.api.nvidia.com/v1` | Free credits on signup; huge model catalog (Llama, Nemotron, DeepSeek…) |
+| **Hugging Face Inference** | `https://router.huggingface.co/v1` | Small free monthly credit; thousands of community models |
+| **Cohere** | `https://api.cohere.com/compatibility/v1` | Free trial tier — use Command family models |
+| **Cloudflare Workers AI** | `https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/v1` | Free daily neuron allocation per account; model names like `@cf/meta/llama-3.1-8b-instruct` |
 | **Ollama** *(local)* | `http://localhost:11434/v1` | Fully offline |
+| **Together** | `https://api.together.xyz/v1` | Free credit on signup |
+| **Fireworks** | `https://api.fireworks.ai/inference/v1` | Free credit on signup |
 | **Anthropic** *(paid, native)* | — | Set `AI_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` instead |
+
+### Providers that don't fit the env-var plug
+
+Some free tiers aren't reachable as a plain `OPENAI_COMPATIBLE_BASE_URL`, so they're **not** one-line swaps here:
+
+- **Puter.js** — a *browser-side* JS library (`js.puter.com`), no API key, no server endpoint. Calls cloud LLMs from the visitor's browser. Integrating it would require a custom provider in [`src/lib/ai/provider.ts`](src/lib/ai/provider.ts), not env vars.
+- **Hugging Face classic Inference endpoints** (`api-inference.huggingface.co`) — per-model URLs, not OpenAI-compatible. Use the Router row above instead.
+- **Cloudflare AI Gateway / LiteLLM / Portkey / OpenRouter** (as aggregator gateways) — front any provider behind a gateway after signup, then paste the gateway URL here as `OPENAI_COMPATIBLE_BASE_URL`.
+- **Make.com, n8n, other workflow tools** — they can call these same LLMs, but you'd be wiring them *around* LogSentinel rather than into it via env.
 
 > 💡 `AI_MAX_INPUT_TOKENS=6000` (default) is calibrated for Groq's 12k TPM free tier. Raise it (e.g. `16000`) on higher-tier providers to send more context per request.
 
