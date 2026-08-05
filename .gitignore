@@ -56,3 +56,10 @@ pg-migrate.log
 
 # opencode local tooling config (keep API keys out of VCS)
 opencode.json
+
+# AI-tool internal instructions (keep locally, don't publish)
+AGENTS.md
+CLAUDE.md
+
+# Backup env files
+.env.bak
