@@ -18,6 +18,12 @@
 
 Drop in raw logs — **nginx, auth.log, syslog, Windows Event, JSON, Apache** — get back a structured threat report: severity ratings, per-IP analysis, attack timelines, and concrete remediation steps. Runs entirely on hardware you control. The only network egress is to the LLM provider *you* chose.
 
+## 🎬 Demo
+
+<p align="center">
+  <img src="docs/demo.gif" width="85%" alt="LogSentinel demo: login, analyst dashboard, threat report walkthrough">
+</p>
+
 ## 📸 See it in action
 
 <p align="center">
